@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import tempfile
+import zipfile
 from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
+from src.models.cnn1d import build_baseline_cnn
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,7 +29,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     dataset = make_demo_dataset() if args.demo_data else load_mitbih_csv(args.data_dir, normalize=args.normalize)
-    model = tf.keras.models.load_model(args.model)
+    model = _load_or_build_model(args.model, dataset.input_length, dataset.num_classes)
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
@@ -43,6 +46,27 @@ def main() -> None:
     metrics["tflite_path"] = str(args.output)
     (args.output.parent / "int8_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print(json.dumps(metrics, indent=2))
+
+
+def _load_or_build_model(model_path: Path, input_length: int, num_classes: int) -> tf.keras.Model:
+    try:
+        return tf.keras.models.load_model(model_path)
+    except Exception:
+        if model_path.suffix == ".keras":
+            try:
+                with zipfile.ZipFile(model_path, "r") as archive:
+                    if "model.weights.h5" in archive.namelist():
+                        with tempfile.NamedTemporaryFile(suffix=".weights.h5", delete=False) as tmp:
+                            tmp.write(archive.read("model.weights.h5"))
+                            tmp.flush()
+                            temp_weights_path = Path(tmp.name)
+                        model = build_baseline_cnn(input_length=input_length, num_classes=num_classes)
+                        model.load_weights(temp_weights_path)
+                        temp_weights_path.unlink(missing_ok=True)
+                        return model
+            except Exception:
+                pass
+        raise
 
 
 def representative_dataset(x_train: np.ndarray, max_samples: int):

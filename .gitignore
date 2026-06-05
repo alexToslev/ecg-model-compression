@@ -227,3 +227,6 @@ __marimo__/
 
 # Raw MIT-BIH source files
 mit-bih-arrhythmia-database-1.0.0/
+
+# Ignore temporary tf export folders
+tmp_tf_model/

@@ -53,6 +53,14 @@ This will write:
 - `data/processed/mitbih_train.csv`
 - `data/processed/mitbih_test.csv`
 
+Perform structured pruning on the baseline model:
+
+```bash
+python -m src.compression.prune_model --data-dir data/processed --epochs 10 --final-sparsity 0.5
+```
+
+This will write the pruned model and evaluation artifacts to `results/pruned/`.
+
 Convert the trained model to int8 TensorFlow Lite:
 
 ```bash

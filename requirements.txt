@@ -4,3 +4,4 @@ scikit-learn
 tensorflow
 matplotlib
 wfdb
+tensorflow-model-optimization
