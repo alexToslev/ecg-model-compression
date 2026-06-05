@@ -224,3 +224,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Raw MIT-BIH source files
+mit-bih-arrhythmia-database-1.0.0/
