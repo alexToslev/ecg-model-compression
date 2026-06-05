@@ -7,10 +7,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+import matplotlib.pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
-from src.models.cnn1d import build_tiny_cnn
+from src.models.cnn1d import build_baseline_cnn
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,7 +46,7 @@ def main() -> None:
             seed=args.seed,
         )
 
-    model = build_tiny_cnn(
+    model = build_baseline_cnn(
         input_length=dataset.input_length,
         num_classes=dataset.num_classes,
         learning_rate=args.learning_rate,
@@ -73,10 +74,13 @@ def main() -> None:
     probabilities = model.predict(dataset.x_test, batch_size=args.batch_size, verbose=0)
     predictions = probabilities.argmax(axis=1)
 
-    model_path = args.output_dir / "tiny_ecg_cnn.keras"
+    model_path = args.output_dir / "baseline_ecg_cnn.keras"
     model.save(model_path)
 
-    pd.DataFrame(history.history).to_csv(args.output_dir / "history.csv", index=False)
+    history_df = pd.DataFrame(history.history)
+    history_df.to_csv(args.output_dir / "history.csv", index=False)
+    _save_training_plot(history_df, args.output_dir / "training_history.png")
+
     report = classification_report(dataset.y_test, predictions, output_dict=True, zero_division=0)
     matrix = confusion_matrix(dataset.y_test, predictions)
 
@@ -93,6 +97,22 @@ def main() -> None:
     np.savetxt(args.output_dir / "confusion_matrix.csv", matrix, delimiter=",", fmt="%d")
 
     print(json.dumps(metrics, indent=2))
+
+
+def _save_training_plot(history_df: pd.DataFrame, output_path: Path) -> None:
+    plt.figure(figsize=(8, 4))
+    plt.plot(history_df["accuracy"], label="train accuracy")
+    plt.plot(history_df["val_accuracy"], label="val accuracy")
+    plt.plot(history_df["loss"], label="train loss")
+    plt.plot(history_df["val_loss"], label="val loss")
+    plt.xlabel("epoch")
+    plt.ylabel("value")
+    plt.title("Training History")
+    plt.legend(loc="best")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
 
 
 def set_reproducible_seed(seed: int) -> None:

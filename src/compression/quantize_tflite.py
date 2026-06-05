@@ -12,9 +12,9 @@ from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Convert a trained ECG model to int8 TensorFlow Lite.")
-    parser.add_argument("--model", type=Path, default=Path("results/baseline_cnn/tiny_ecg_cnn.keras"))
+    parser.add_argument("--model", type=Path, default=Path("results/baseline_cnn/baseline_ecg_cnn.keras"))
     parser.add_argument("--data-dir", type=Path, default=Path("data/processed"))
-    parser.add_argument("--output", type=Path, default=Path("results/quantized/tiny_ecg_cnn_int8.tflite"))
+    parser.add_argument("--output", type=Path, default=Path("results/quantized/baseline_ecg_cnn_int8.tflite"))
     parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     parser.add_argument("--representative-samples", type=int, default=200)
     parser.add_argument("--demo-data", action="store_true")
