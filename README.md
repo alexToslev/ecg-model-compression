@@ -30,10 +30,10 @@ Train on the real MIT-BIH CSV files with the larger baseline model:
 python -m src.train_cnn --data-dir data/processed --epochs 20
 ```
 
-This baseline is intentionally larger than the demo model and is meant to support structured pruning and post-training INT8 quantization. The model architecture is now roughly 100k parameters and follows a stronger 1D CNN design:
+This baseline is intentionally larger than the demo model and is meant to support structured pruning and post-training INT8 quantization. The model architecture is now roughly 300k parameters and follows a stronger 1D CNN design:
 
-- `Conv1D(32)` → `Conv1D(64)` → `MaxPool`
-- `Conv1D(128)` → `Conv1D(128)` → `MaxPool`
+- `Conv1D(64)` → `Conv1D(128)` → `MaxPool`
+- `Conv1D(256)` → `Conv1D(192)` → `MaxPool`
 - `GlobalAveragePooling1D` → `Dense(128)` → output
 
 If your real dataset is provided as a zip archive, put the archive in the repository root and extract it into `data/processed` with:

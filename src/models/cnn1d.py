@@ -10,12 +10,12 @@ def build_baseline_cnn(
 ) -> tf.keras.Model:
     inputs = tf.keras.Input(shape=(input_length, 1), name="ecg")
 
-    x = tf.keras.layers.Conv1D(32, kernel_size=5, padding="same", activation="relu")(inputs)
-    x = tf.keras.layers.Conv1D(64, kernel_size=5, padding="same", activation="relu")(x)
+    x = tf.keras.layers.Conv1D(64, kernel_size=5, padding="same", activation="relu")(inputs)
+    x = tf.keras.layers.Conv1D(128, kernel_size=5, padding="same", activation="relu")(x)
     x = tf.keras.layers.MaxPooling1D(pool_size=2)(x)
 
-    x = tf.keras.layers.Conv1D(128, kernel_size=3, padding="same", activation="relu")(x)
-    x = tf.keras.layers.Conv1D(128, kernel_size=3, padding="same", activation="relu")(x)
+    x = tf.keras.layers.Conv1D(256, kernel_size=3, padding="same", activation="relu")(x)
+    x = tf.keras.layers.Conv1D(192, kernel_size=3, padding="same", activation="relu")(x)
     x = tf.keras.layers.MaxPooling1D(pool_size=2)(x)
 
     x = tf.keras.layers.GlobalAveragePooling1D()(x)
