@@ -17,11 +17,20 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Run a quick smoke test with synthetic ECG-like data:
+Run a quick smoke test with synthetic ECG-like data for development:
 
 ```bash
-python -m src.train_cnn --demo-data --epochs 3
-python -m src.compression.quantize_tflite --demo-data
+python -m src train --demo-data --epochs 3
+python -m src quantize --demo-data
+```
+
+When the full dataset is available, run using the `data/processed` folder:
+
+```bash
+python -m src train --data-dir data/processed --epochs 20
+python -m src evaluate --model results/baseline_cnn/tiny_ecg_cnn.keras --data-dir data/processed
+python -m src quantize --model results/baseline_cnn/tiny_ecg_cnn.keras --data-dir data/processed
+python -m src summarize --run-dir results/baseline_cnn
 ```
 
 Train on the real MIT-BIH CSV files:
