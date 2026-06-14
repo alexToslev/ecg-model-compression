@@ -104,14 +104,14 @@ Objective: implement manual fixed-point 8-bit quantization for the baseline MLP,
 
 Assigned primary owner: Student 2
 
-### WP6 — Pruning, analysis, and final report
+### WP6 — Baseline 1D CNN implementation and evaluation
 
-Objective: complete pruning experiments, compare results, and publish final documentation.
+Objective: implement and train a small 1D CNN baseline for ECG classification, then evaluate model performance and export a Keras-compatible baseline model for later quantization.
 
-- WP6.1: add pruning pipeline and retraining for compressed models.
-- WP6.2: compare pruned vs. quantized vs. baseline accuracy and size.
-- WP6.3: prepare final report and lessons learned.
-- WP6.4: validate commit history and merge into the shared branch.
+- WP6.1: implement `src/models/cnn1d.py` with a manual tiny 1D CNN using Conv1D, MaxPool1D, Flatten, and Dense layers.
+- WP6.2: implement `src/train_cnn.py` to train the scratch CNN on demo and real ECG data, save training artifacts, and export a Keras baseline model.
+- WP6.3: generate baseline evaluation metrics, confusion matrix, and learning curve summaries in `src/evaluation/summarize_baseline.py`.
+- WP6.4: support later int8 TFLite conversion using the exported Keras baseline model.
 
 Assigned owners: both students
 

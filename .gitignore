@@ -191,6 +191,7 @@ results/
 
 tmp_mlp_run/
 tmp_tf_model/
+tmp_quant_run/
 
 # PyCharm
 #   JetBrains specific template is maintained in a separate JetBrains.gitignore that can
