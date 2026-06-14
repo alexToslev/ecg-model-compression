@@ -10,6 +10,12 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 from src.data.visualization import visualize_dataset
+from src.evaluation.summarize_baseline import (
+    plot_class_metrics,
+    plot_confusion_matrix,
+    plot_learning_curves,
+    write_summary,
+)
 from src.models.cnn1d import build_tiny_cnn
 
 
@@ -151,6 +157,14 @@ def _save_training_artifacts(
     model_path = args.output_dir / "tiny_ecg_cnn_weights.npz"
     np.savez(model_path, **model.get_parameters())
 
+    keras_model_path = args.output_dir / "tiny_ecg_cnn.keras"
+    try:
+        model.save(keras_model_path)
+        keras_model_saved = True
+    except RuntimeError as exc:
+        print(f"[train_cnn] Warning: unable to export Keras model: {exc}")
+        keras_model_saved = False
+
     history_path = args.output_dir / "history.csv"
     pd.DataFrame(history).to_csv(history_path, index=False)
 
@@ -159,6 +173,7 @@ def _save_training_artifacts(
     report = classification_report(dataset.y_test, predictions, output_dict=True, zero_division=0)
     matrix = confusion_matrix(dataset.y_test, predictions)
 
+    model_size_bytes = int(model_path.stat().st_size)
     metrics = {
         "test_loss": float(test_loss),
         "test_accuracy": float(test_accuracy),
@@ -168,8 +183,12 @@ def _save_training_artifacts(
             int(np.prod(value.shape)) for value in model.get_parameters().values()
         ),
         "model_path": str(model_path),
+        "model_size_bytes": model_size_bytes,
         "history_path": str(history_path),
     }
+    if keras_model_saved:
+        metrics["keras_model_path"] = str(keras_model_path)
+        metrics["keras_model_size_bytes"] = int(keras_model_path.stat().st_size)
 
     (args.output_dir / "metrics.json").write_text(
         json.dumps(metrics, indent=2), encoding="utf-8"
@@ -179,6 +198,14 @@ def _save_training_artifacts(
     )
     np.savetxt(args.output_dir / "confusion_matrix.csv", matrix, delimiter=",", fmt="%d")
 
+    plots_dir = args.output_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_learning_curves(pd.DataFrame(history), plots_dir / "learning_curves.png")
+    plot_class_metrics(report, plots_dir / "class_metrics.png")
+    plot_confusion_matrix(matrix, plots_dir / "confusion_matrix.png")
+    write_summary(args.output_dir / "baseline_summary.md", pd.DataFrame(history), metrics, report, matrix)
+
+    print(f"[train_cnn] Saved baseline evaluation plots to {plots_dir}")
     print(json.dumps(metrics, indent=2))
 
 
