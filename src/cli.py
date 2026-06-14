@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-from src.compression.quantize_tflite import main as quantize_main
-from src.evaluate_model import main as evaluate_main
 from src.train_cnn import main as train_main
-from src.evaluation.summarize_baseline import main as summarize_main
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +27,15 @@ def parse_args() -> argparse.Namespace:
     evaluate_parser.add_argument("--data-dir", type=str, default="data/processed")
     evaluate_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     evaluate_parser.add_argument("--demo-data", action="store_true")
+
+    visualize_parser = subparsers.add_parser("visualize", help="Generate ECG dataset visualizations")
+    visualize_parser.add_argument("--data-dir", type=str, default="data/processed")
+    visualize_parser.add_argument("--output-dir", type=str, default="results/dataset_visualizations")
+    visualize_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
+    visualize_parser.add_argument("--validation-fraction", type=float, default=0.15)
+    visualize_parser.add_argument("--seed", type=int, default=42)
+    visualize_parser.add_argument("--demo-data", action="store_true")
+    visualize_parser.add_argument("--samples-per-class", type=int, default=3)
 
     quantize_parser = subparsers.add_parser("quantize", help="Convert a trained model to int8 TensorFlow Lite")
     quantize_parser.add_argument("--model", type=str, default="results/baseline_cnn/tiny_ecg_cnn.keras")
@@ -58,17 +65,43 @@ def _build_forwarded_argv(args: argparse.Namespace) -> list[str]:
 
 def main() -> None:
     args = parse_args()
+    sys.argv = _build_forwarded_argv(args)
+
     if args.command == "train":
-        sys.argv = _build_forwarded_argv(args)
         train_main()
     elif args.command == "evaluate":
-        sys.argv = _build_forwarded_argv(args)
+        from src.evaluate_model import main as evaluate_main
+
         evaluate_main()
+    elif args.command == "visualize":
+        from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
+        from src.data.visualization import visualize_dataset
+
+        dataset = (
+            make_demo_dataset(
+                validation_fraction=args.validation_fraction,
+                seed=args.seed,
+            )
+            if args.demo_data
+            else load_mitbih_csv(
+                data_dir=Path(args.data_dir),
+                validation_fraction=args.validation_fraction,
+                normalize=args.normalize,
+                seed=args.seed,
+            )
+        )
+        visualize_dataset(
+            dataset,
+            Path(args.output_dir),
+            samples_per_class=args.samples_per_class,
+        )
     elif args.command == "quantize":
-        sys.argv = _build_forwarded_argv(args)
+        from src.compression.quantize_tflite import main as quantize_main
+
         quantize_main()
     elif args.command == "summarize":
-        sys.argv = _build_forwarded_argv(args)
+        from src.evaluation.summarize_baseline import main as summarize_main
+
         summarize_main()
     else:
         raise SystemExit("Unknown command")

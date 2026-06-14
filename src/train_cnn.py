@@ -9,6 +9,7 @@ import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
+from src.data.visualization import visualize_dataset
 from src.models.cnn1d import build_tiny_cnn
 
 
@@ -44,6 +45,7 @@ def main() -> None:
 
     dataset = _load_dataset(args)
     _log_dataset_summary(dataset, args)
+    _save_dataset_visualizations(dataset, args)
 
     model = build_tiny_cnn(
         input_length=dataset.input_length,
@@ -178,6 +180,13 @@ def _save_training_artifacts(
     np.savetxt(args.output_dir / "confusion_matrix.csv", matrix, delimiter=",", fmt="%d")
 
     print(json.dumps(metrics, indent=2))
+
+
+def _save_dataset_visualizations(dataset, args: argparse.Namespace) -> None:
+    visualization_dir = args.output_dir / "dataset_visualizations"
+    print(f"[train_cnn] Saving dataset visualizations to {visualization_dir}")
+    visualize_dataset(dataset, visualization_dir)
+    print("[train_cnn] Dataset visualizations saved.")
 
 
 def set_reproducible_seed(seed: int) -> None:

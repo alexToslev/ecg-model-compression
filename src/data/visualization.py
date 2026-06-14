@@ -95,3 +95,33 @@ def plot_split_distribution(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_path, dpi=180)
     plt.close(figure)
+
+
+def visualize_dataset(
+    dataset,
+    output_dir: Path,
+    class_names: dict[int, str] | None = None,
+    samples_per_class: int = 3,
+) -> None:
+    """Generate key dataset visualizations for training and validation."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    plot_signal_examples(
+        dataset.x_train,
+        dataset.y_train,
+        output_dir / "train_signal_examples.png",
+        class_names,
+        samples_per_class,
+    )
+    plot_class_distribution(
+        dataset.y_train,
+        output_dir / "train_class_distribution.png",
+        class_names,
+    )
+    plot_split_distribution(
+        dataset.y_train,
+        dataset.y_val,
+        dataset.y_test,
+        output_dir / "dataset_split_distribution.png",
+        class_names,
+    )
