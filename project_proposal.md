@@ -64,14 +64,16 @@ Objective: implement the ECG data pipeline from scratch with loading, normalizat
 
 Assigned primary owner: Student 1
 
-### WP3 — Baseline CNN architecture and training
+### WP3 — Baseline MLP and CNN architecture
 
-Objective: build a from-scratch 1D CNN model and training pipeline that can run on demo or full ECG data.
+Objective: validate the compression pipeline with a simple baseline MLP trained from scratch before building the manual CNN, then implement the from-scratch CNN training pipeline.
 
-- WP3.1: implement `src/models/cnn1d.py` with explicit Conv1D, ReLU, MaxPool1D, Flatten, and Dense layers, plus manual forward/backward propagation and parameter updates.
-- WP3.2: implement `src/train_cnn.py` with a manual training loop, batch updates, validation metrics, history logging, and output artifact saving.
-- WP3.3: support reproducibility with random seeds and reproducible dataset splits.
-- WP3.4: provide both demo mode and full dataset mode in training.
+- WP3.1: implement `src/models/mlp.py` as a fully manual scratch MLP with explicit Forward/Backward/Update logic, and support export to TensorFlow/Keras for TFLite conversion.
+- WP3.2: implement `src/train_mlp.py` with dataset loading, manual SGD training, evaluation, artifact saving, and support for demo/full ECG modes.
+- WP3.3: implement `src/models/cnn1d.py` with explicit Conv1D, ReLU, MaxPool1D, Flatten, and Dense layers, plus manual forward/backward propagation and parameter updates.
+- WP3.4: implement `src/train_cnn.py` with a manual training loop, batch updates, validation metrics, history logging, and output artifact saving.
+- WP3.5: support reproducibility with random seeds and reproducible dataset splits across both the MLP and CNN workloads.
+- WP3.6: provide both demo mode and full dataset mode in training.
 
 Assigned primary owner: Student 2
 

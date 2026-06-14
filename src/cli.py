@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from src.train_cnn import main as train_main
+from src.train_mlp import main as train_mlp_main
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,6 +37,19 @@ def parse_args() -> argparse.Namespace:
     visualize_parser.add_argument("--seed", type=int, default=42)
     visualize_parser.add_argument("--demo-data", action="store_true")
     visualize_parser.add_argument("--samples-per-class", type=int, default=3)
+
+    train_mlp_parser = subparsers.add_parser("train-mlp", help="Train a baseline MLP ECG model")
+    train_mlp_parser.add_argument("--data-dir", type=str, default="data/processed")
+    train_mlp_parser.add_argument("--output-dir", type=str, default="results/baseline_mlp")
+    train_mlp_parser.add_argument("--epochs", type=int, default=20)
+    train_mlp_parser.add_argument("--batch-size", type=int, default=128)
+    train_mlp_parser.add_argument("--learning-rate", type=float, default=1e-3)
+    train_mlp_parser.add_argument("--validation-fraction", type=float, default=0.15)
+    train_mlp_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
+    train_mlp_parser.add_argument("--seed", type=int, default=42)
+    train_mlp_parser.add_argument("--hidden-units", type=int, default=64)
+    train_mlp_parser.add_argument("--dense-layers", type=int, default=2)
+    train_mlp_parser.add_argument("--demo-data", action="store_true")
 
     quantize_parser = subparsers.add_parser("quantize", help="Convert a trained model to int8 TensorFlow Lite")
     quantize_parser.add_argument("--model", type=str, default="results/baseline_cnn/tiny_ecg_cnn.keras")
@@ -95,6 +109,8 @@ def main() -> None:
             Path(args.output_dir),
             samples_per_class=args.samples_per_class,
         )
+    elif args.command == "train-mlp":
+        train_mlp_main()
     elif args.command == "quantize":
         from src.compression.quantize_tflite import main as quantize_main
 

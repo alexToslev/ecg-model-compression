@@ -45,7 +45,7 @@ def plot_learning_curves(history: pd.DataFrame, output_path: Path) -> None:
     epochs = np.arange(1, len(history) + 1)
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-    axes[0].plot(epochs, history["accuracy"], label="train")
+    axes[0].plot(epochs, history["train_accuracy"], label="train")
     axes[0].plot(epochs, history["val_accuracy"], label="validation")
     axes[0].set_title("Accuracy")
     axes[0].set_xlabel("Epoch")
@@ -53,7 +53,7 @@ def plot_learning_curves(history: pd.DataFrame, output_path: Path) -> None:
     axes[0].legend()
     axes[0].grid(True, alpha=0.3)
 
-    axes[1].plot(epochs, history["loss"], label="train")
+    axes[1].plot(epochs, history["train_loss"], label="train")
     axes[1].plot(epochs, history["val_loss"], label="validation")
     axes[1].set_title("Loss")
     axes[1].set_xlabel("Epoch")
@@ -141,12 +141,12 @@ def write_summary(
         "",
         "## Main results",
         "",
-        f"- Final training accuracy: {final['accuracy']:.4f}",
+        f"- Final training accuracy: {final['train_accuracy']:.4f}",
         f"- Final validation accuracy: {final['val_accuracy']:.4f}",
         f"- Test accuracy: {metrics['test_accuracy']:.4f}",
         f"- Test loss: {metrics['test_loss']:.4f}",
         f"- Trainable parameters: {metrics['parameters']}",
-        f"- Saved Keras model: `{metrics['model_path']}`",
+        f"- Saved Keras model: `{metrics.get('keras_model_path', metrics.get('model_path', 'unknown'))}`",
         "",
         "## Per-class observations",
         "",
