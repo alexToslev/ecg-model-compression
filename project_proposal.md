@@ -82,9 +82,10 @@ Assigned primary owner: Student 2
 Objective: implement full evaluation on hold-out test data with reports and visual summaries.
 
 - WP4.1: implement `src/evaluate_model.py` for float32 model testing.
-- WP4.2: implement `src/evaluation/summarize_baseline.py` for plots and markdown summaries.
-- WP4.3: add prediction reporting, confusion matrix, and class metrics.
-- WP4.4: include model size and parameter count in the reporting.
+- WP4.2: implement `src/prune_mlp.py` for magnitude-based pruning of the manual MLP and sparsity vs accuracy trade-off analysis.
+- WP4.3: implement `src/evaluation/summarize_baseline.py` for plots and markdown summaries.
+- WP4.4: add prediction reporting, confusion matrix, class metrics, and pruning trade-off reporting.
+- WP4.5: include model size, parameter count, and sparsity metrics in the reporting.
 
 Assigned primary owner: Student 2
 

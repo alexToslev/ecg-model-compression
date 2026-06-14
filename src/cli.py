@@ -51,6 +51,14 @@ def parse_args() -> argparse.Namespace:
     train_mlp_parser.add_argument("--dense-layers", type=int, default=2)
     train_mlp_parser.add_argument("--demo-data", action="store_true")
 
+    prune_mlp_parser = subparsers.add_parser("prune-mlp", help="Prune a trained manual MLP and evaluate sparsity vs accuracy")
+    prune_mlp_parser.add_argument("--weights", type=str, default="results/baseline_mlp/baseline_mlp_weights.npz")
+    prune_mlp_parser.add_argument("--data-dir", type=str, default="data/processed")
+    prune_mlp_parser.add_argument("--output-dir", type=str, default="results/baseline_mlp/pruning")
+    prune_mlp_parser.add_argument("--demo-data", action="store_true")
+    prune_mlp_parser.add_argument("--prune-fractions", type=str, default="0.0,0.2,0.4,0.6,0.8,0.9")
+    prune_mlp_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
+
     quantize_parser = subparsers.add_parser("quantize", help="Convert a trained model to int8 TensorFlow Lite")
     quantize_parser.add_argument("--model", type=str, default="results/baseline_cnn/tiny_ecg_cnn.keras")
     quantize_parser.add_argument("--data-dir", type=str, default="data/processed")
@@ -111,6 +119,10 @@ def main() -> None:
         )
     elif args.command == "train-mlp":
         train_mlp_main()
+    elif args.command == "prune-mlp":
+        from src.prune_mlp import main as prune_mlp_main
+
+        prune_mlp_main()
     elif args.command == "quantize":
         from src.compression.quantize_tflite import main as quantize_main
 

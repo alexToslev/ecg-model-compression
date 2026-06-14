@@ -23,6 +23,7 @@ class Dense:
         self.out_features = out_features
         self.weights = np.random.randn(in_features, out_features).astype(np.float32) * np.sqrt(2.0 / in_features)
         self.bias = np.zeros(out_features, dtype=np.float32)
+        self.mask = np.ones_like(self.weights, dtype=np.float32)
         self.cache_input: np.ndarray | None = None
         self.grad_weights = np.zeros_like(self.weights)
         self.grad_bias = np.zeros_like(self.bias)
@@ -39,7 +40,20 @@ class Dense:
 
     def update(self, learning_rate: float) -> None:
         self.weights -= learning_rate * self.grad_weights
+        self.weights *= self.mask
         self.bias -= learning_rate * self.grad_bias
+
+    def prune_by_threshold(self, threshold: float) -> None:
+        self.mask = (np.abs(self.weights) > threshold).astype(np.float32)
+        self.weights *= self.mask
+
+    @property
+    def total_parameters(self) -> int:
+        return int(self.weights.size)
+
+    @property
+    def zero_parameters(self) -> int:
+        return int(np.sum(self.mask == 0.0))
 
 
 class ReLU:
@@ -127,9 +141,47 @@ class ManualMLP:
             if isinstance(layer, Dense):
                 params[f"dense_{layer_index}.weights"] = layer.weights
                 params[f"dense_{layer_index}.bias"] = layer.bias
+                params[f"dense_{layer_index}.mask"] = layer.mask
         params["output_layer.weights"] = self.output_layer.weights
         params["output_layer.bias"] = self.output_layer.bias
+        params["output_layer.mask"] = self.output_layer.mask
         return params
+
+    def set_parameters(self, params: dict[str, np.ndarray]) -> None:
+        for layer_index, layer in enumerate(self.layers):
+            if isinstance(layer, Dense):
+                layer.weights = params[f"dense_{layer_index}.weights"].astype(np.float32)
+                layer.bias = params[f"dense_{layer_index}.bias"].astype(np.float32)
+                layer.mask = params.get(f"dense_{layer_index}.mask", np.ones_like(layer.weights)).astype(np.float32)
+        self.output_layer.weights = params["output_layer.weights"].astype(np.float32)
+        self.output_layer.bias = params["output_layer.bias"].astype(np.float32)
+        self.output_layer.mask = params.get("output_layer.mask", np.ones_like(self.output_layer.weights)).astype(np.float32)
+
+    def prune_by_fraction(self, prune_fraction: float) -> None:
+        if prune_fraction <= 0.0:
+            return
+        if prune_fraction >= 1.0:
+            for layer in self._all_dense_layers():
+                layer.mask = np.zeros_like(layer.weights)
+                layer.weights *= layer.mask
+            return
+
+        weights = np.concatenate(
+            [np.abs(layer.weights).flatten() for layer in self._all_dense_layers()]
+        )
+        threshold = np.percentile(weights, prune_fraction * 100)
+        for layer in self._all_dense_layers():
+            layer.prune_by_threshold(threshold)
+
+    def _all_dense_layers(self) -> list[Dense]:
+        return [layer for layer in self.layers if isinstance(layer, Dense)] + [self.output_layer]
+
+    def total_parameters(self) -> int:
+        return sum(layer.total_parameters for layer in self._all_dense_layers())
+
+    def sparsity(self) -> float:
+        zeros = sum(layer.zero_parameters for layer in self._all_dense_layers())
+        return float(zeros / self.total_parameters())
 
     def save_keras_model(self, path: Path) -> None:
         try:

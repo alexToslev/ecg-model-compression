@@ -29,9 +29,19 @@ When the full dataset is available, run using the `data/processed` folder:
 
 ```bash
 python -m src train-mlp --data-dir data/processed --epochs 20
+python -m src prune-mlp --weights results/baseline_mlp/baseline_mlp_weights.npz --data-dir data/processed --output-dir results/baseline_mlp/pruning
 python -m src evaluate --model results/baseline_mlp/baseline_mlp.keras --data-dir data/processed
 python -m src quantize --model results/baseline_mlp/baseline_mlp.keras --data-dir data/processed
 python -m src summarize --run-dir results/baseline_mlp
+
+# Pruning output
+The pruning workflow writes:
+- `results/baseline_mlp/pruning/pruning_metrics.csv`
+- `results/baseline_mlp/pruning/pruning_metrics.json`
+- `results/baseline_mlp/pruning/pruning_sparsity_vs_accuracy.png`
+- `results/baseline_mlp/pruning/pruning_fraction_vs_accuracy.png`
+- `results/baseline_mlp/pruning/pruning_sparsity_vs_loss.png`
+- `results/baseline_mlp/pruning/pruning_summary.md`
 
 # Later CNN experiments
 python -m src train --data-dir data/processed --epochs 20
