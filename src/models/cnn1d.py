@@ -188,6 +188,7 @@ class SoftmaxCrossEntropy:
 
 class CNNFromScratch:
     def __init__(self, input_length: int, num_classes: int):
+        self.input_length = input_length
         self.conv1 = Conv1D(in_channels=1, out_channels=8, kernel_size=7, padding="same")
         self.relu1 = ReLU()
         self.pool1 = MaxPool1D(pool_size=2)
@@ -255,8 +256,57 @@ class CNNFromScratch:
         logits = self.forward(x)
         return np.argmax(logits, axis=1)
 
-    def save(self, path: str | np.ndarray | Path) -> None:
-        raise NotImplementedError("Manual CNN save is not implemented in this module.")
+    def save(self, path: str | Path) -> None:
+        self.save_keras_model(path)
+
+    def save_keras_model(self, path: str | Path) -> None:
+        try:
+            import tensorflow as tf
+        except ImportError as exc:
+            raise RuntimeError(
+                "TensorFlow is required to export a Keras model from the scratch CNN."
+            ) from exc
+
+        path = Path(path)
+        inputs = tf.keras.Input(shape=(self.input_length, 1), name="ecg_input")
+        x = tf.keras.layers.Conv1D(filters=8, kernel_size=7, padding="same", activation=None, name="conv1")(inputs)
+        x = tf.keras.layers.ReLU(name="relu1")(x)
+        x = tf.keras.layers.MaxPool1D(pool_size=2, name="pool1")(x)
+
+        x = tf.keras.layers.Conv1D(filters=16, kernel_size=5, padding="same", activation=None, name="conv2")(x)
+        x = tf.keras.layers.ReLU(name="relu2")(x)
+        x = tf.keras.layers.MaxPool1D(pool_size=2, name="pool2")(x)
+
+        x = tf.keras.layers.Conv1D(filters=32, kernel_size=3, padding="same", activation=None, name="conv3")(x)
+        x = tf.keras.layers.ReLU(name="relu3")(x)
+        x = tf.keras.layers.MaxPool1D(pool_size=2, name="pool3")(x)
+
+        x = tf.keras.layers.Flatten(name="flatten")(x)
+        x = tf.keras.layers.Dense(64, activation=None, name="dense1")(x)
+        x = tf.keras.layers.ReLU(name="relu4")(x)
+        outputs = tf.keras.layers.Dense(self.output_layer.out_features, activation="softmax", name="output_layer")(x)
+
+        keras_model = tf.keras.Model(inputs=inputs, outputs=outputs, name="tiny_ecg_cnn")
+        keras_model.get_layer("conv1").set_weights([
+            self.conv1.weights.transpose(2, 1, 0),
+            self.conv1.bias,
+        ])
+        keras_model.get_layer("conv2").set_weights([
+            self.conv2.weights.transpose(2, 1, 0),
+            self.conv2.bias,
+        ])
+        keras_model.get_layer("conv3").set_weights([
+            self.conv3.weights.transpose(2, 1, 0),
+            self.conv3.bias,
+        ])
+        keras_model.get_layer("dense1").set_weights(
+            [self.dense1.weights, self.dense1.bias]
+        )
+        keras_model.get_layer("output_layer").set_weights(
+            [self.output_layer.weights, self.output_layer.bias]
+        )
+
+        keras_model.save(path)
 
     def get_parameters(self) -> dict[str, np.ndarray]:
         return {
