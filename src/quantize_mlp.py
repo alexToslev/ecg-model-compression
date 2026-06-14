@@ -256,6 +256,14 @@ def plot_quantization_results(metrics: dict, output_dir: Path) -> None:
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.bar(["original", "quantized"], [metrics["original_test_loss"], metrics["quantized_test_loss"]], color=["#4c72b0", "#dd8452"])
+    ax.set_title("Original vs Quantized Test Loss")
+    ax.set_ylabel("Loss")
+    ax.grid(axis="y", alpha=0.3)
+    fig.savefig(output_dir / "quantization_loss_comparison.png", dpi=180)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.bar(["original", "quantized"], [metrics["original_model_size_bytes"], metrics["quantized_model_size_bytes"]], color=["#4c72b0", "#dd8452"])
     ax.set_title("Original vs Quantized Model Size")
     ax.set_ylabel("Bytes")
@@ -281,6 +289,7 @@ def write_quantization_summary(metrics: dict, output_dir: Path) -> None:
         "## Generated plots",
         "",
         "- `quantization_accuracy_comparison.png`",
+        "- `quantization_loss_comparison.png`",
         "- `quantization_size_comparison.png`",
         "",
         "## Notes",
