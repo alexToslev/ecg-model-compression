@@ -42,59 +42,69 @@ ECG classification models are valuable for arrhythmia detection, but medical dev
 
 ## Work packages
 
-### WP1 — Baseline pipeline and project setup
+### WP1 — Project setup and planning
 
-Objective: establish the core repository structure, dataset loader, and baseline training flow.
+Objective: establish the project structure, branch workflow, and deliverables.
 
 - WP1.1: design repository layout and write `project_proposal.md`.
-- WP1.2: implement `src/data/mitbih_csv.py` with dataset validation, preprocessing, and demo data support. Use the smaller synthetic demo dataset for initial development while keeping the full MIT-BIH CSV workflow ready for later stages.
-- WP1.3: implement `src/models/cnn1d.py` with a small 1D CNN architecture.
-- WP1.4: implement `src/train_cnn.py` for training, saving model artifacts, metrics, and history.
-- WP1.5: add README usage instructions and baseline CLI guidance.
+- WP1.2: add README usage instructions and a professional CLI guidance.
+- WP1.3: create the branch strategy and commit mapping for `WPx.y` subtasks.
 
 Assigned primary owner: Student 1
 
-### WP2 — Evaluation and reporting
+### WP2 — ECG dataset preprocessing and visualization
 
-Objective: build evaluation tooling, plots, and summary generation for the baseline model.
+Objective: implement the ECG data pipeline from scratch with loading, normalization, splitting, and plots.
 
-- WP2.1: implement `src/evaluate_model.py` for float32 model evaluation on test data.
-- WP2.2: implement `src/evaluation/summarize_baseline.py` for learning curves, confusion matrix, and class metrics.
-- WP2.3: add evaluation reporting outputs: `metrics.json`, `classification_report.json`, `history.csv`, plots, and summary markdown.
-- WP2.4: update documentation with `python -m src evaluate` and `python -m src summarize` commands.
+- WP2.1: implement `src/data/mitbih_csv.py` for CSV loading and dataset validation.
+- WP2.2: add `src/data/visualization.py` for signal plotting, class balance, and split diagnostics.
+- WP2.3: implement normalization options: `none`, `standard`, and `per_sample`.
+- WP2.4: add synthetic demo dataset generation for development and debugging.
+- WP2.5: write dataset diagnostics that confirm sample counts, input shape, and class coverage.
 
 Assigned primary owner: Student 1
 
-### WP3 — Quantization pipeline
+### WP3 — Baseline CNN architecture and training
 
-Objective: add a reproducible TFLite int8 quantization pipeline and compare compressed model accuracy and size.
+Objective: build a from-scratch 1D CNN model and training pipeline that can run on demo or full ECG data.
 
-- WP3.1: implement `src/compression/quantize_tflite.py` with representative dataset generation and int8 conversion.
-- WP3.2: add int8 evaluation and size reporting for the quantized model.
-- WP3.3: integrate the compression pipeline into the unified CLI or documentation.
-- WP3.4: document expected quantized outputs and comparison metrics.
-
-Assigned primary owner: Student 2
-
-### WP4 — Pruning and advanced compression
-
-Objective: extend the project with pruning experiments and model size/accuracy tradeoff analysis.
-
-- WP4.1: implement pruning-aware training or weight pruning for the 1D CNN.
-- WP4.2: add model checkpoints for pruned and retrained compressed models.
-- WP4.3: evaluate pruned model accuracy and compare size vs. baseline.
-- WP4.4: document pruning results in markdown and add comparison tables.
+- WP3.1: implement `src/models/cnn1d.py` with explicit Conv1D, ReLU, MaxPool1D, Flatten, and Dense layers, plus manual forward/backward propagation and parameter updates.
+- WP3.2: implement `src/train_cnn.py` with a manual training loop, batch updates, validation metrics, history logging, and output artifact saving.
+- WP3.3: support reproducibility with random seeds and reproducible dataset splits.
+- WP3.4: provide both demo mode and full dataset mode in training.
 
 Assigned primary owner: Student 2
 
-### WP5 — Final report and reproducibility
+### WP4 — Testing and evaluation
 
-Objective: finalize documentation, validate the workflow, and prepare the repository for grading.
+Objective: implement full evaluation on hold-out test data with reports and visual summaries.
 
-- WP5.1: produce a final written report with methodology, results, and lessons learned.
-- WP5.2: create a reproducible command list and summary of all experiments.
-- WP5.3: validate the branch history and ensure each commit corresponds to a WP subtask.
-- WP5.4: merge changes into the shared branch after both students finish their parts.
+- WP4.1: implement `src/evaluate_model.py` for float32 model testing.
+- WP4.2: implement `src/evaluation/summarize_baseline.py` for plots and markdown summaries.
+- WP4.3: add prediction reporting, confusion matrix, and class metrics.
+- WP4.4: include model size and parameter count in the reporting.
+
+Assigned primary owner: Student 2
+
+### WP5 — Structured quantization and compression
+
+Objective: add TFLite int8 conversion and compare accuracy and model size.
+
+- WP5.1: implement `src/compression/quantize_tflite.py` with representative dataset support.
+- WP5.2: evaluate the quantized model for accuracy and file size.
+- WP5.3: document compression results and comparison metrics.
+- WP5.4: prepare reproducible commands for compression experiments.
+
+Assigned primary owner: Student 2
+
+### WP6 — Pruning, analysis, and final report
+
+Objective: complete pruning experiments, compare results, and publish final documentation.
+
+- WP6.1: add pruning pipeline and retraining for compressed models.
+- WP6.2: compare pruned vs. quantized vs. baseline accuracy and size.
+- WP6.3: prepare final report and lessons learned.
+- WP6.4: validate commit history and merge into the shared branch.
 
 Assigned owners: both students
 
