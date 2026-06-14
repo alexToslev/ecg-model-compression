@@ -24,17 +24,49 @@ python -m src.train_cnn --demo-data --epochs 3
 python -m src.compression.quantize_tflite --demo-data
 ```
 
+Run the manual NumPy CNN smoke test:
+
+```bash
+python -m src.train_cnn_scratch --demo-data --epochs 3
+```
+
 Train on the real MIT-BIH CSV files:
 
 ```bash
 python -m src.train_cnn --data-dir data/processed --epochs 20
 ```
 
+Train the from-scratch NumPy CNN on the real MIT-BIH CSV files:
+
+```bash
+python -m src.train_cnn_scratch --data-dir data/processed --epochs 10 --max-train-samples 5000
+```
+
+The from-scratch CNN is intentionally smaller and slower than the Keras model. It is used to show the learning mechanics clearly:
+
+- 1D convolution forward and backward pass
+- ReLU forward and backward pass
+- max pooling forward and backward pass
+- global average pooling backward pass
+- dense layer forward and backward pass
+- softmax cross-entropy loss
+- mini-batch SGD weight updates
+
+The TensorFlow/Keras CNN remains the practical path for TensorFlow Lite quantization and ESP32 deployment.
+
 Convert the trained model to int8 TensorFlow Lite:
 
 ```bash
 python -m src.compression.quantize_tflite --data-dir data/processed
 ```
+
+Generate presentation plots after running the Keras, quantization, and from-scratch experiments:
+
+```bash
+python -m src.evaluation.make_presentation_plots
+```
+
+The plots are written to `results/presentation_plots/`.
 
 This creates a full quantization comparison in `results/quantized/`:
 
