@@ -91,7 +91,7 @@ Assigned primary owner: Student 2
 
 ### WP5 — Structured quantization and compression
 
-Objective: add TFLite int8 conversion and compare accuracy and model size.
+Objective: implement manual fixed-point 8-bit quantization for the baseline MLP, then compare the quantized model against the original model.
 
 - WP5.1: implement `src/compression/quantize_tflite.py` with representative dataset support.
 - WP5.2: evaluate the quantized model for accuracy and file size.

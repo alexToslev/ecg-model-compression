@@ -59,6 +59,14 @@ def parse_args() -> argparse.Namespace:
     prune_mlp_parser.add_argument("--prune-fractions", type=str, default="0.0,0.2,0.4,0.6,0.8,0.9")
     prune_mlp_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
 
+    quantize_mlp_parser = subparsers.add_parser("quantize-mlp", help="Quantize the manual MLP to 8-bit fixed-point and compare to the original model")
+    quantize_mlp_parser.add_argument("--weights", type=str, default="results/baseline_mlp/baseline_mlp_weights.npz")
+    quantize_mlp_parser.add_argument("--data-dir", type=str, default="data/processed")
+    quantize_mlp_parser.add_argument("--output-dir", type=str, default="results/baseline_mlp/quantization")
+    quantize_mlp_parser.add_argument("--demo-data", action="store_true")
+    quantize_mlp_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
+    quantize_mlp_parser.add_argument("--calibration-samples", type=int, default=200)
+
     quantize_parser = subparsers.add_parser("quantize", help="Convert a trained model to int8 TensorFlow Lite")
     quantize_parser.add_argument("--model", type=str, default="results/baseline_cnn/tiny_ecg_cnn.keras")
     quantize_parser.add_argument("--data-dir", type=str, default="data/processed")
@@ -123,6 +131,10 @@ def main() -> None:
         from src.prune_mlp import main as prune_mlp_main
 
         prune_mlp_main()
+    elif args.command == "quantize-mlp":
+        from src.quantize_mlp import main as quantize_mlp_main
+
+        quantize_mlp_main()
     elif args.command == "quantize":
         from src.compression.quantize_tflite import main as quantize_main
 
