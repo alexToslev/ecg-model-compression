@@ -47,6 +47,27 @@ class Dense:
         self.mask = (np.abs(self.weights) > threshold).astype(np.float32)
         self.weights *= self.mask
 
+    def prune_neurons_by_fraction(self, prune_fraction: float) -> None:
+        if prune_fraction <= 0.0:
+            return
+        if prune_fraction >= 1.0:
+            self.mask[:] = 0.0
+            self.weights[:] = 0.0
+            self.bias[:] = 0.0
+            return
+
+        neuron_norms = np.linalg.norm(self.weights, axis=0)
+        threshold = np.percentile(neuron_norms, prune_fraction * 100)
+        neuron_mask = (neuron_norms > threshold).astype(np.float32)
+        self.mask *= neuron_mask[np.newaxis, :]
+        self.weights *= self.mask
+        self.bias *= neuron_mask
+
+    def fake_quantize_weights(self) -> float:
+        quantized, scale = fake_quantize_tensor(self.weights)
+        self.weights = quantized.astype(np.float32) * scale
+        return scale
+
     @property
     def total_parameters(self) -> int:
         return int(self.weights.size)
@@ -54,6 +75,19 @@ class Dense:
     @property
     def zero_parameters(self) -> int:
         return int(np.sum(self.mask == 0.0))
+
+
+def fake_quantize_tensor(tensor: np.ndarray) -> tuple[np.ndarray, float]:
+    max_val = float(np.max(np.abs(tensor)))
+    scale = max(max_val / 127.0, 1e-8)
+    quantized = np.round(tensor / scale).clip(-127, 127).astype(np.int8)
+    return quantized, scale
+
+
+def fake_quantize_activation(x: np.ndarray) -> np.ndarray:
+    max_val = float(np.max(np.abs(x)))
+    scale = max(max_val / 127.0, 1e-8)
+    return np.round(x / scale).clip(-127, 127).astype(np.int8).astype(np.float32) * scale
 
 
 class ReLU:
@@ -118,6 +152,16 @@ class ManualMLP:
         logits = self.output_layer.forward(x)
         return logits
 
+    def forward_quantized(self, x: np.ndarray) -> np.ndarray:
+        x = self.flatten.forward(x)
+        x = fake_quantize_activation(x)
+        for layer in self.layers:
+            x = layer.forward(x)
+            if isinstance(layer, ReLU):
+                x = fake_quantize_activation(x)
+        logits = self.output_layer.forward(x)
+        return logits
+
     def backward(self, grad_output: np.ndarray) -> None:
         grad = self.output_layer.backward(grad_output)
         for layer in reversed(self.layers):
@@ -130,6 +174,12 @@ class ManualMLP:
             if isinstance(layer, Dense):
                 layer.update(learning_rate)
         self.output_layer.update(learning_rate)
+
+    def fake_quantize_weights(self) -> None:
+        for layer in self.layers:
+            if isinstance(layer, Dense):
+                layer.fake_quantize_weights()
+        self.output_layer.fake_quantize_weights()
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         logits = self.forward(x)
@@ -172,6 +222,17 @@ class ManualMLP:
         threshold = np.percentile(weights, prune_fraction * 100)
         for layer in self._all_dense_layers():
             layer.prune_by_threshold(threshold)
+
+    def prune_structured_by_fraction(self, prune_fraction: float) -> None:
+        if prune_fraction <= 0.0:
+            return
+        if prune_fraction >= 1.0:
+            for layer in self._all_dense_layers():
+                layer.prune_neurons_by_fraction(1.0)
+            return
+
+        for layer in self._all_dense_layers():
+            layer.prune_neurons_by_fraction(prune_fraction)
 
     def _all_dense_layers(self) -> list[Dense]:
         return [layer for layer in self.layers if isinstance(layer, Dense)] + [self.output_layer]

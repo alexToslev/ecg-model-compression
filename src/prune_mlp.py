@@ -22,6 +22,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=Path("results/baseline_mlp/pruning"))
     parser.add_argument("--demo-data", action="store_true")
     parser.add_argument(
+        "--structured",
+        action="store_true",
+        help="Use structured neuron pruning instead of unstructured weight pruning.",
+    )
+    parser.add_argument(
         "--prune-fractions",
         type=str,
         default="0.0,0.2,0.4,0.6,0.8,0.9",
@@ -60,7 +65,10 @@ def main() -> None:
 
     for prune_fraction in prune_fractions:
         pruned_model = copy.deepcopy(model)
-        pruned_model.prune_by_fraction(prune_fraction)
+        if args.structured:
+            pruned_model.prune_structured_by_fraction(prune_fraction)
+        else:
+            pruned_model.prune_by_fraction(prune_fraction)
 
         val_loss, val_accuracy = _evaluate_model(pruned_model, dataset.x_val, dataset.y_val)
         test_loss, test_accuracy = _evaluate_model(pruned_model, dataset.x_test, dataset.y_test)

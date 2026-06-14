@@ -93,10 +93,14 @@ Assigned primary owner: Student 2
 
 Objective: implement manual fixed-point 8-bit quantization for the baseline MLP, then compare the quantized model against the original model.
 
-- WP5.1: implement `src/compression/quantize_tflite.py` with representative dataset support.
-- WP5.2: evaluate the quantized model for accuracy and file size.
-- WP5.3: document compression results and comparison metrics.
-- WP5.4: prepare reproducible commands for compression experiments.
+- WP5.1: implement `src/quantize_mlp.py` for manual 8-bit fixed-point quantization of the scratch MLP.
+- WP5.2: compute original vs quantized test accuracy, loss, and model size.
+- WP5.3: generate comparison plots and a markdown summary.
+- WP5.4: update reproducible commands and document the quantized MLP workflow.
+- WP5.5: add quantization-aware training support for the manual MLP to evaluate training-time fixed-point simulation.
+- WP5.6: add structured neuron pruning support and compare structured pruning vs. unstructured magnitude pruning.
+
+- WP5.7: retain `src/compression/quantize_tflite.py` for later TFLite conversion, but prioritize manual fixed-point quantization for WP5.
 
 Assigned primary owner: Student 2
 

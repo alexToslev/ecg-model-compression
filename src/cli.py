@@ -49,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     train_mlp_parser.add_argument("--seed", type=int, default=42)
     train_mlp_parser.add_argument("--hidden-units", type=int, default=64)
     train_mlp_parser.add_argument("--dense-layers", type=int, default=2)
+    train_mlp_parser.add_argument("--quantize-aware", action="store_true", help="Enable quantization-aware training for the manual MLP.")
     train_mlp_parser.add_argument("--demo-data", action="store_true")
 
     prune_mlp_parser = subparsers.add_parser("prune-mlp", help="Prune a trained manual MLP and evaluate sparsity vs accuracy")
@@ -56,6 +57,7 @@ def parse_args() -> argparse.Namespace:
     prune_mlp_parser.add_argument("--data-dir", type=str, default="data/processed")
     prune_mlp_parser.add_argument("--output-dir", type=str, default="results/baseline_mlp/pruning")
     prune_mlp_parser.add_argument("--demo-data", action="store_true")
+    prune_mlp_parser.add_argument("--structured", action="store_true", help="Use structured neuron pruning instead of unstructured weight pruning.")
     prune_mlp_parser.add_argument("--prune-fractions", type=str, default="0.0,0.2,0.4,0.6,0.8,0.9")
     prune_mlp_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
 

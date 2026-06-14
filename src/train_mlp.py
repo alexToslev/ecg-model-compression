@@ -31,6 +31,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-units", type=int, default=64)
     parser.add_argument("--dense-layers", type=int, default=2)
     parser.add_argument(
+        "--quantize-aware",
+        action="store_true",
+        help="Enable quantization-aware training by fake-quantizing weights and activations during training.",
+    )
+    parser.add_argument(
         "--demo-data",
         action="store_true",
         help="Use synthetic ECG-like data for fast development and testing.",
@@ -109,11 +114,17 @@ def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[floa
             x_batch = x_shuffled[start : start + args.batch_size]
             y_batch = y_shuffled[start : start + args.batch_size]
 
-            logits = model.forward(x_batch)
+            if args.quantize_aware:
+                logits = model.forward_quantized(x_batch)
+            else:
+                logits = model.forward(x_batch)
+
             batch_loss = model.loss.forward(logits, y_batch)
             grad_logits = model.loss.backward()
             model.backward(grad_logits)
             model.update(args.learning_rate)
+            if args.quantize_aware:
+                model.fake_quantize_weights()
 
             epoch_loss += float(batch_loss) * len(x_batch)
 

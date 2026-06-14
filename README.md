@@ -29,6 +29,7 @@ When the full dataset is available, run using the `data/processed` folder:
 
 ```bash
 python -m src train-mlp --data-dir data/processed --epochs 20
+python -m src train-mlp --data-dir data/processed --epochs 20 --quantize-aware
 python -m src prune-mlp --weights results/baseline_mlp/baseline_mlp_weights.npz --data-dir data/processed --output-dir results/baseline_mlp/pruning
 python -m src prune-mlp --weights results/baseline_mlp/baseline_mlp_weights.npz --data-dir data/processed --output-dir results/baseline_mlp/pruning --structured
 python -m src quantize-mlp --weights results/baseline_mlp/baseline_mlp_weights.npz --data-dir data/processed --output-dir results/baseline_mlp/quantization
