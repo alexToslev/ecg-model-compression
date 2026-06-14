@@ -79,6 +79,12 @@ def parse_args() -> argparse.Namespace:
 
     summarize_parser = subparsers.add_parser("summarize", help="Generate evaluation plots and a markdown summary")
     summarize_parser.add_argument("--run-dir", type=str, default="results/baseline_cnn")
+    summarize_parser.add_argument(
+        "--quantized-dir",
+        type=str,
+        default=None,
+        help="Optional directory containing int8_metrics.json for baseline vs quantized comparison.",
+    )
 
     return parser.parse_args()
 

@@ -21,6 +21,12 @@ CLASS_NAMES = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create plots and a short written summary for a baseline run.")
     parser.add_argument("--run-dir", type=Path, default=Path("results/baseline_cnn"))
+    parser.add_argument(
+        "--quantized-dir",
+        type=Path,
+        default=None,
+        help="Optional directory containing int8 metrics from TensorFlow Lite quantization.",
+    )
     return parser.parse_args()
 
 
@@ -38,7 +44,31 @@ def main() -> None:
     plot_learning_curves(history, plots_dir / "learning_curves.png")
     plot_class_metrics(report, plots_dir / "class_metrics.png")
     plot_confusion_matrix(confusion, plots_dir / "confusion_matrix.png")
-    write_summary(run_dir / "baseline_summary.md", history, metrics, report, confusion)
+
+    quantized_metrics = None
+    if args.quantized_dir is not None:
+        quantized_metrics_path = args.quantized_dir / "int8_metrics.json"
+        if quantized_metrics_path.exists():
+            quantized_metrics = json.loads(
+                quantized_metrics_path.read_text(encoding="utf-8")
+            )
+            plot_baseline_quantized_comparison(
+                metrics,
+                quantized_metrics,
+                plots_dir / "baseline_vs_quantized_accuracy.png",
+                plots_dir / "baseline_vs_quantized_size.png",
+            )
+        else:
+            print(f"[summarize_baseline] Warning: {quantized_metrics_path} not found.")
+
+    write_summary(
+        run_dir / "baseline_summary.md",
+        history,
+        metrics,
+        report,
+        confusion,
+        quantized_metrics,
+    )
 
 
 def plot_learning_curves(history: pd.DataFrame, output_path: Path) -> None:
@@ -118,12 +148,48 @@ def plot_confusion_matrix(confusion: np.ndarray, output_path: Path) -> None:
     plt.close(fig)
 
 
+def plot_baseline_quantized_comparison(
+    baseline_metrics: dict,
+    quantized_metrics: dict,
+    accuracy_path: Path,
+    size_path: Path,
+) -> None:
+    labels = ["Baseline", "Quantized int8"]
+    accuracy_values = [baseline_metrics["test_accuracy"], float(quantized_metrics.get("int8_accuracy", np.nan))]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    bars = ax.bar(labels, accuracy_values, color=["#4c72b0", "#dd8452"])
+    ax.set_title("Baseline vs Quantized Accuracy")
+    ax.set_ylabel("Accuracy")
+    ax.set_ylim(0.0, 1.0)
+    for bar, value in zip(bars, accuracy_values):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, f"{value:.2%}", ha="center", va="bottom")
+    fig.tight_layout()
+    fig.savefig(accuracy_path, dpi=180)
+    plt.close(fig)
+
+    baseline_size = baseline_metrics.get("keras_model_size_bytes", baseline_metrics.get("model_size_bytes", 0))
+    quantized_size = quantized_metrics.get("tflite_size_bytes", 0)
+    size_values = [baseline_size / 1024.0, quantized_size / 1024.0]
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    bars = ax.bar(labels, size_values, color=["#4c72b0", "#dd8452"])
+    ax.set_title("Baseline vs Quantized Model Size")
+    ax.set_ylabel("Size (KB)")
+    for bar, value in zip(bars, size_values):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.0, f"{value:.1f} KB", ha="center", va="bottom")
+    fig.tight_layout()
+    fig.savefig(size_path, dpi=180)
+    plt.close(fig)
+
+
 def write_summary(
     output_path: Path,
     history: pd.DataFrame,
     metrics: dict,
     report: dict,
     confusion: np.ndarray,
+    quantized_metrics: dict | None = None,
 ) -> None:
     final = history.iloc[-1]
     supports = {class_id: int(report[class_id]["support"]) for class_id in report if class_id.isdigit()}
@@ -176,6 +242,34 @@ def write_summary(
             "",
             f"The strongest recall is class {strongest_class} ({recalls[strongest_class]:.4f}). The weakest "
             "classes should be checked before claiming the classifier is medically reliable.",
+        ]
+    )
+
+    if quantized_metrics is not None:
+        baseline_size_bytes = metrics.get("keras_model_size_bytes", metrics.get("model_size_bytes"))
+        baseline_size_label = f"{baseline_size_bytes} bytes" if baseline_size_bytes is not None else "unknown"
+
+        lines.extend(
+            [
+                "",
+                "## Baseline vs Quantized Comparison",
+                "",
+                f"- Baseline test accuracy: {metrics['test_accuracy']:.4f}",
+                f"- Quantized int8 accuracy: {quantized_metrics.get('int8_accuracy', float('nan')):.4f}",
+                f"- Baseline Keras model size: {baseline_size_label}",
+                f"- Quantized TFLite size: {quantized_metrics.get('tflite_size_bytes', 'unknown')} bytes",
+                "",
+                "The comparison plots illustrate the accuracy and model size tradeoff between the float32 baseline and the int8 quantized model.",
+                "",
+                "Generated comparison plots:",
+                "",
+                "- `plots/baseline_vs_quantized_accuracy.png`",
+                "- `plots/baseline_vs_quantized_size.png`",
+            ]
+        )
+
+    lines.extend(
+        [
             "",
             "## Confusion matrix",
             "",
@@ -190,13 +284,22 @@ def write_summary(
             "- `plots/learning_curves.png`",
             "- `plots/class_metrics.png`",
             "- `plots/confusion_matrix.png`",
-            "",
-            "## Next step",
-            "",
-            "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
-            "",
         ]
     )
+
+    if quantized_metrics is not None:
+        lines.extend([
+            "- `plots/baseline_vs_quantized_accuracy.png`",
+            "- `plots/baseline_vs_quantized_size.png`",
+        ])
+
+    lines.extend([
+        "",
+        "## Next step",
+        "",
+        "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
+        "",
+    ])
 
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
