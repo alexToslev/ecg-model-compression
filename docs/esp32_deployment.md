@@ -31,6 +31,44 @@ These commands write:
 
 The ESP32 will not train the model. It will load the already trained int8 model, copy one quantized ECG sample into the input tensor, run inference, and print the predicted class over Serial.
 
+## Step 2: Arduino IDE Sketch
+
+Open this sketch in Arduino IDE:
+
+```text
+esp32/ecg_tflite_micro/ecg_tflite_micro.ino
+```
+
+The sketch includes:
+
+- `model_data.h` - the int8 TensorFlow Lite model as a C array
+- `test_sample.h` - one quantized ECG heartbeat and its expected label
+
+Initial Arduino IDE settings:
+
+- Board: ESP32 Dev Module or the matching ESP32-WROOM-32 board entry
+- Port: the serial port shown when the board is connected by USB
+- Serial Monitor baud rate: `115200`
+
+You also need an Arduino TensorFlow Lite Micro library that provides headers such as:
+
+```text
+tensorflow/lite/micro/micro_interpreter.h
+tensorflow/lite/micro/all_ops_resolver.h
+```
+
+If Arduino IDE reports that these files are missing, install a TensorFlow Lite Micro / TensorFlowLite_ESP32 compatible library from the Arduino Library Manager or from its GitHub ZIP package, then compile again.
+
+The sketch prints:
+
+- model size
+- expected label
+- predicted label
+- raw int8 output scores
+- dequantized output scores
+- inference time in microseconds
+- free heap before and after inference
+
 ## Board
 
 Initial target board:
