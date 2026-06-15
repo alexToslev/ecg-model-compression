@@ -1,0 +1,8 @@
+{
+  "sample_index": 0,
+  "expected_label": 0,
+  "input_scale": 0.003921568859368563,
+  "input_zero_point": -128,
+  "length": 187,
+  "source": "data\\processed"
+}
