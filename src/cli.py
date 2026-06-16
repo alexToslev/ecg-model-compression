@@ -98,6 +98,26 @@ def parse_args() -> argparse.Namespace:
     compare_cnn_parser.add_argument("--qat-dir", type=str, default=None)
     compare_cnn_parser.add_argument("--output-dir", type=str, default="results/baseline_cnn/quantization")
 
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Benchmark all available MLP and CNN compression artifacts in one report",
+    )
+    benchmark_parser.add_argument("--data-dir", type=str, default="data/processed")
+    benchmark_parser.add_argument("--output-dir", type=str, default="results/benchmarks")
+    benchmark_parser.add_argument("--baseline-mlp-dir", type=str, default="results/baseline_mlp")
+    benchmark_parser.add_argument("--pruned-mlp-dir", type=str, default="results/baseline_mlp/pruning_structured")
+    benchmark_parser.add_argument("--quantized-mlp-dir", type=str, default="results/baseline_mlp/quantization")
+    benchmark_parser.add_argument("--baseline-cnn-dir", type=str, default="results/baseline_cnn")
+    benchmark_parser.add_argument("--pruned-cnn-dir", type=str, default="results/baseline_cnn/pruning")
+    benchmark_parser.add_argument("--quantized-cnn-dir", type=str, default="results/baseline_cnn")
+    benchmark_parser.add_argument("--qat-cnn-dir", type=str, default="results/baseline_cnn_qat")
+    benchmark_parser.add_argument("--batch-size", type=int, default=128)
+    benchmark_parser.add_argument("--timing-samples", type=int, default=512)
+    benchmark_parser.add_argument("--repeats", type=int, default=5)
+    benchmark_parser.add_argument("--warmup", type=int, default=1)
+    benchmark_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
+    benchmark_parser.add_argument("--demo-data", action="store_true")
+
     summarize_parser = subparsers.add_parser("summarize", help="Generate evaluation plots and a markdown summary")
     summarize_parser.add_argument("--run-dir", type=str, default="results/baseline_cnn")
     summarize_parser.add_argument(
@@ -176,6 +196,10 @@ def main() -> None:
         from src.compare_cnn_compression import main as compare_cnn_main
 
         compare_cnn_main()
+    elif args.command == "benchmark":
+        from src.benchmark_models import main as benchmark_main
+
+        benchmark_main()
     elif args.command == "summarize":
         from src.evaluation.summarize_baseline import main as summarize_main
 
