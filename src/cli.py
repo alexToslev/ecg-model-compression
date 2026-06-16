@@ -118,6 +118,19 @@ def parse_args() -> argparse.Namespace:
     benchmark_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     benchmark_parser.add_argument("--demo-data", action="store_true")
 
+    tinyml_parser = subparsers.add_parser(
+        "export-tinyml",
+        help="Create an ESP32/TinyML export package and deployment simulation report",
+    )
+    tinyml_parser.add_argument("--model", type=str, default="results/baseline_cnn/tiny_ecg_cnn_int8.tflite")
+    tinyml_parser.add_argument("--metrics", type=str, default="results/baseline_cnn/int8_metrics.json")
+    tinyml_parser.add_argument("--benchmark", type=str, default="results/benchmarks/model_benchmark_comparison.csv")
+    tinyml_parser.add_argument("--output-dir", type=str, default="results/esp32")
+    tinyml_parser.add_argument("--model-name", type=str, default="tiny_ecg_cnn_int8")
+    tinyml_parser.add_argument("--arena-bytes", type=int, default=None)
+    tinyml_parser.add_argument("--flash-budget-bytes", type=int, default=4 * 1024 * 1024)
+    tinyml_parser.add_argument("--sram-budget-bytes", type=int, default=320 * 1024)
+
     summarize_parser = subparsers.add_parser("summarize", help="Generate evaluation plots and a markdown summary")
     summarize_parser.add_argument("--run-dir", type=str, default="results/baseline_cnn")
     summarize_parser.add_argument(
@@ -200,6 +213,10 @@ def main() -> None:
         from src.benchmark_models import main as benchmark_main
 
         benchmark_main()
+    elif args.command == "export-tinyml":
+        from src.export_tinyml import main as export_tinyml_main
+
+        export_tinyml_main()
     elif args.command == "summarize":
         from src.evaluation.summarize_baseline import main as summarize_main
 
