@@ -184,14 +184,14 @@ cython_debug/
 # Project data and generated artifacts
 data/raw/
 data/processed/
+mit-bih-arrhythmia-database-*/
 results/
 *.keras
 *.tflite
 *.h5
+*:Zone.Identifier
 
-tmp_mlp_run/
-tmp_tf_model/
-tmp_quant_run/
+tmp_*/
 
 # PyCharm
 #   JetBrains specific template is maintained in a separate JetBrains.gitignore that can
