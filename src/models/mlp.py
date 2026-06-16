@@ -240,6 +240,11 @@ class ManualMLP:
     def total_parameters(self) -> int:
         return sum(layer.total_parameters for layer in self._all_dense_layers())
 
+    def parameter_count(self) -> int:
+        return int(
+            sum(layer.weights.size + layer.bias.size for layer in self._all_dense_layers())
+        )
+
     def sparsity(self) -> float:
         zeros = sum(layer.zero_parameters for layer in self._all_dense_layers())
         return float(zeros / self.total_parameters())
