@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -125,3 +126,84 @@ def visualize_dataset(
         output_dir / "dataset_split_distribution.png",
         class_names,
     )
+    diagnostics = build_dataset_diagnostics(dataset)
+    (output_dir / "dataset_diagnostics.json").write_text(
+        json.dumps(diagnostics, indent=2), encoding="utf-8"
+    )
+    write_dataset_diagnostics_markdown(
+        diagnostics,
+        output_dir / "dataset_diagnostics.md",
+    )
+
+
+def build_dataset_diagnostics(dataset) -> dict:
+    """Create a compact diagnostics dictionary for the loaded dataset."""
+    split_arrays = {
+        "train": (dataset.x_train, dataset.y_train),
+        "validation": (dataset.x_val, dataset.y_val),
+        "test": (dataset.x_test, dataset.y_test),
+    }
+
+    diagnostics = {
+        "input_length": int(dataset.input_length),
+        "num_classes": int(dataset.num_classes),
+        "splits": {},
+        "total_samples": int(len(dataset.y_train) + len(dataset.y_val) + len(dataset.y_test)),
+    }
+
+    for split_name, (x_split, y_split) in split_arrays.items():
+        flattened = x_split.squeeze(-1)
+        diagnostics["splits"][split_name] = {
+            "samples": int(len(y_split)),
+            "shape": [int(value) for value in x_split.shape],
+            "class_counts": _class_counts(y_split, dataset.num_classes),
+            "signal_mean": float(np.mean(flattened)),
+            "signal_std": float(np.std(flattened)),
+            "signal_min": float(np.min(flattened)),
+            "signal_max": float(np.max(flattened)),
+        }
+
+    return diagnostics
+
+
+def write_dataset_diagnostics_markdown(diagnostics: dict, output_path: Path) -> None:
+    """Write diagnostics as a small Markdown report for the project notebook/report."""
+    lines = [
+        "# Dataset Diagnostics",
+        "",
+        f"- Input length: {diagnostics['input_length']}",
+        f"- Number of classes: {diagnostics['num_classes']}",
+        f"- Total samples: {diagnostics['total_samples']}",
+        "",
+        "## Split Summary",
+        "",
+        "| split | samples | shape | mean | std | min | max |",
+        "|---|---:|---|---:|---:|---:|---:|",
+    ]
+
+    for split_name, split_info in diagnostics["splits"].items():
+        lines.append(
+            f"| {split_name} | {split_info['samples']} | {split_info['shape']} | "
+            f"{split_info['signal_mean']:.6f} | {split_info['signal_std']:.6f} | "
+            f"{split_info['signal_min']:.6f} | {split_info['signal_max']:.6f} |"
+        )
+
+    lines.extend([
+        "",
+        "## Class Counts",
+        "",
+        "| split | class | samples |",
+        "|---|---:|---:|",
+    ])
+
+    for split_name, split_info in diagnostics["splits"].items():
+        for class_id, count in split_info["class_counts"].items():
+            lines.append(f"| {split_name} | {class_id} | {count} |")
+
+    output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _class_counts(y: np.ndarray, num_classes: int) -> dict[str, int]:
+    labels, counts = np.unique(y, return_counts=True)
+    observed = {int(label): int(count) for label, count in zip(labels, counts)}
+    return {str(class_id): observed.get(class_id, 0) for class_id in range(num_classes)}
