@@ -23,6 +23,11 @@ def main() -> None:
     args = parse_args()
     dataset = make_demo_dataset() if args.demo_data else load_mitbih_csv(args.data_dir, normalize=args.normalize)
     model = tf.keras.models.load_model(args.model)
+    model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+    )
     loss, accuracy = model.evaluate(dataset.x_test, dataset.y_test, verbose=0)
     predictions = model.predict(dataset.x_test, verbose=0).argmax(axis=1)
 
