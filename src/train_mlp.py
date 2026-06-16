@@ -9,6 +9,12 @@ import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
+from src.evaluation.summarize_baseline import (
+    plot_class_metrics,
+    plot_confusion_matrix,
+    plot_learning_curves,
+    write_summary,
+)
 from src.models.mlp import build_manual_mlp
 
 
@@ -188,11 +194,14 @@ def _save_training_artifacts(
         "test_accuracy": float(test_accuracy),
         "num_classes": dataset.num_classes,
         "input_length": dataset.input_length,
-        "parameters": sum(int(np.prod(value.shape)) for value in model.get_parameters().values()),
+        "parameters": model.parameter_count(),
         "weights_path": str(model_path),
         "keras_model_path": str(model_path_for_metrics),
         "history_path": str(history_path),
+        "weights_size_bytes": int(model_path.stat().st_size),
     }
+    if model_path_for_metrics.exists():
+        metrics["keras_model_size_bytes"] = int(model_path_for_metrics.stat().st_size)
 
     (args.output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     (args.output_dir / "classification_report.json").write_text(
@@ -200,6 +209,24 @@ def _save_training_artifacts(
     )
     np.savetxt(args.output_dir / "confusion_matrix.csv", matrix, delimiter=",", fmt="%d")
 
+    history_df = pd.DataFrame(history)
+    plots_dir = args.output_dir / "plots"
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    plot_learning_curves(history_df, plots_dir / "learning_curves.png")
+    plot_class_metrics(report, plots_dir / "class_metrics.png")
+    plot_confusion_matrix(matrix, plots_dir / "confusion_matrix.png")
+    write_summary(
+        args.output_dir / "baseline_summary.md",
+        history_df,
+        metrics,
+        report,
+        matrix,
+        title="Baseline MLP Summary",
+        model_description="A from-scratch MLP was trained on preprocessed MIT-BIH heartbeat segments.",
+        next_step="Run MLP pruning and manual 8-bit quantization, then compare accuracy, sparsity, and model size against this baseline.",
+    )
+
+    print(f"[train_mlp] Saved baseline evaluation plots to {plots_dir}")
     print(json.dumps(metrics, indent=2))
 
 

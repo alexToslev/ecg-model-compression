@@ -61,6 +61,7 @@ def main() -> None:
         else:
             print(f"[summarize_baseline] Warning: {quantized_metrics_path} not found.")
 
+    summary_text = _summary_text_for_run(run_dir)
     write_summary(
         run_dir / "baseline_summary.md",
         history,
@@ -68,7 +69,26 @@ def main() -> None:
         report,
         confusion,
         quantized_metrics,
+        title=summary_text["title"],
+        model_description=summary_text["model_description"],
+        next_step=summary_text["next_step"],
     )
+
+
+def _summary_text_for_run(run_dir: Path) -> dict[str, str]:
+    run_name = run_dir.name.lower()
+    if "mlp" in run_name:
+        return {
+            "title": "Baseline MLP Summary",
+            "model_description": "A from-scratch MLP was trained on preprocessed MIT-BIH heartbeat segments.",
+            "next_step": "Run MLP pruning and manual 8-bit quantization, then compare accuracy, sparsity, and model size against this baseline.",
+        }
+
+    return {
+        "title": "Baseline 1D CNN Summary",
+        "model_description": "A small 1D CNN was trained on preprocessed MIT-BIH heartbeat segments.",
+        "next_step": "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
+    }
 
 
 def plot_learning_curves(history: pd.DataFrame, output_path: Path) -> None:
@@ -190,19 +210,26 @@ def write_summary(
     report: dict,
     confusion: np.ndarray,
     quantized_metrics: dict | None = None,
+    title: str = "Baseline 1D CNN Summary",
+    model_description: str | None = None,
+    next_step: str = "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
 ) -> None:
     final = history.iloc[-1]
     supports = {class_id: int(report[class_id]["support"]) for class_id in report if class_id.isdigit()}
     recalls = {class_id: report[class_id]["recall"] for class_id in report if class_id.isdigit()}
     weakest_class = min(recalls, key=recalls.get)
     strongest_class = max(recalls, key=recalls.get)
+    if model_description is None:
+        model_description = (
+            "A small 1D CNN was trained on preprocessed MIT-BIH heartbeat segments."
+        )
 
     lines = [
-        "# Baseline 1D CNN Summary",
+        f"# {title}",
         "",
         "## What was run",
         "",
-        "A small 1D CNN was trained on preprocessed MIT-BIH heartbeat segments. Each input has "
+        f"{model_description} Each input has "
         f"{metrics['input_length']} ECG values and the model predicts one of {metrics['num_classes']} classes.",
         "",
         "## Main results",
@@ -236,9 +263,9 @@ def write_summary(
             "loss curves decrease. This means the first baseline is behaving correctly and does not show "
             "obvious overfitting.",
             "",
-            f"The overall test accuracy is high ({metrics['test_accuracy']:.2%}), but this number hides "
-            "an important class imbalance issue. The majority class has very high recall, while minority "
-            f"class {weakest_class} has the weakest recall ({recalls[weakest_class]:.4f}).",
+            f"The overall test accuracy is {metrics['test_accuracy']:.2%}. This single number should be "
+            "read together with the per-class metrics, because class imbalance can hide weak minority-class "
+            f"performance. Class {weakest_class} has the weakest recall ({recalls[weakest_class]:.4f}).",
             "",
             f"The strongest recall is class {strongest_class} ({recalls[strongest_class]:.4f}). The weakest "
             "classes should be checked before claiming the classifier is medically reliable.",
@@ -297,7 +324,7 @@ def write_summary(
         "",
         "## Next step",
         "",
-        "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
+        next_step,
         "",
     ])
 
