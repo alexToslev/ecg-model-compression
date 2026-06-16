@@ -1,0 +1,76 @@
+{
+  "decision": "export_ready_for_esp32_simulation",
+  "model_path": "results/baseline_cnn/tiny_ecg_cnn_int8.tflite",
+  "model_size_bytes": 62856,
+  "model_array_header": "results/esp32/tiny_ecg_cnn_int8_model.h",
+  "example_sketch": "results/esp32/esp32_tflite_micro_example.ino",
+  "estimated_tensor_arena_bytes": 177152,
+  "estimated_total_ram_bytes": 177344,
+  "flash_budget_bytes": 4194304,
+  "sram_budget_bytes": 327680,
+  "input": {
+    "name": "serving_default_ecg_input:0",
+    "shape": [
+      1,
+      187,
+      1
+    ],
+    "dtype": "int8",
+    "quantization_scale": 0.02109804004430771,
+    "quantization_zero_point": -7,
+    "bytes": 187
+  },
+  "output": {
+    "name": "StatefulPartitionedCall_1:0",
+    "shape": [
+      1,
+      5
+    ],
+    "dtype": "int8",
+    "quantization_scale": 0.00390625,
+    "quantization_zero_point": -128,
+    "bytes": 5
+  },
+  "operators": [
+    "CONV_2D",
+    "EXPAND_DIMS",
+    "FULLY_CONNECTED",
+    "MAX_POOL_2D",
+    "PACK",
+    "RESHAPE",
+    "SHAPE",
+    "SOFTMAX",
+    "STRIDED_SLICE"
+  ],
+  "tensor_bytes_observed_by_interpreter": 70736,
+  "io_tensor_bytes": 192,
+  "int8_metrics": {
+    "int8_accuracy": 0.874946446422621,
+    "tflite_size_bytes": 62856,
+    "tflite_path": "results/baseline_cnn/tiny_ecg_cnn_int8.tflite"
+  },
+  "benchmark_row": {
+    "model": "ptq_int8_cnn",
+    "family": "CNN",
+    "method": "post_training_int8_tflite",
+    "dataset": "MIT-BIH processed CSV",
+    "training_mode": "post_training_quantization",
+    "epochs": 20.0,
+    "test_accuracy": 0.874946446422621,
+    "test_loss": null,
+    "parameters": 49781.0,
+    "parameter_sparsity": 0.0,
+    "structured_sparsity": 0.0,
+    "size_bytes": 62856.0,
+    "inference_ms_per_sample": 0.0125163177090807,
+    "timing_samples": 256,
+    "artifact_dir": "results/baseline_cnn",
+    "result_available": true,
+    "notes": "TensorFlow Lite int8 CNN"
+  },
+  "notes": [
+    "This is an export and simulation report, not proof of a flashed ESP32 run.",
+    "Tensor arena is estimated from the local TFLite interpreter tensor shapes; final firmware may need tuning.",
+    "Use the generated header and sketch as a starting point for TensorFlow Lite Micro on ESP32."
+  ]
+}
