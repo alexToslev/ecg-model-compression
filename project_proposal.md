@@ -115,6 +115,17 @@ Objective: implement and train a small 1D CNN baseline for ECG classification, t
 
 Assigned owners: both students
 
+### WP7 — Structured CNN pruning and compression evaluation
+
+Objective: apply structured pruning to the scratch 1D CNN and measure compression effects in terms of sparsity, model size, and accuracy degradation.
+
+- WP7.1: add structured filter pruning for `Conv1D` layers and structured neuron pruning for dense layers in `src/models/cnn1d.py`.
+- WP7.2: create `src/prune_cnn.py` to evaluate the effect of structured pruning on validation and test accuracy.
+- WP7.3: generate compression tradeoff plots and a summary report for CNN structured pruning.
+- WP7.4: compare structured CNN pruning results against the unpruned baseline model.
+
+Assigned owners: both students
+
 ## Success criteria
 
 - The baseline model trains correctly on demo and real ECG data.

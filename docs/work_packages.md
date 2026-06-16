@@ -1,14 +1,14 @@
 # WP1-WP11 Implementation Roadmap
 
-This roadmap reconciles the PDF proposal, `PROJECT_AUDIT.md`, and the current
+This roadmap reconciles the PDF proposal, `docs/project_audit.md`, and the current
 repository state. It is the working checklist for finishing the project one
 small work package at a time.
 
 ## Source of Truth
 
 - Branch: `cnn_implementation`
-- Proposal file: `Project_Proposal_AP.pdf`
-- Audit file: `PROJECT_AUDIT.md`
+- Proposal file: local `Project_Proposal_AP.pdf` and tracked `project_proposal.md`
+- Audit file: `docs/project_audit.md`
 - Current implementation: manual NumPy MLP and CNN pipelines with compression
   experiments under `src/`
 
@@ -20,17 +20,17 @@ scope.
 
 | WP | Proposal scope | Current status | Remaining gap |
 |---|---|---:|---|
-| WP1 | Literature review, repository setup, development environment | Partial | Add clean setup notes and literature summary |
-| WP2 | ECG dataset loading, normalization, train/validation/test split, signal visualization | Mostly complete | Add a clear preprocessing diagnostics artifact |
-| WP3 | Baseline MLP implementation and training | Mostly complete | Preserve final run outputs and document the workflow |
-| WP4 | Magnitude-based MLP pruning and sparsity-vs-accuracy analysis | Complete enough | Curate final outputs and smoke-test the command |
-| WP5 | Fixed-point / 8-bit MLP quantization and comparison | Mostly complete | Integrate final comparison text and outputs |
-| WP6 | Baseline 1D CNN implementation, training, and evaluation | Mostly complete | Preserve useful 20-epoch results and validate commands |
-| WP7 | CNN pruning and compression evaluation | Partial | Finish structured pruning reporting and fix known issues |
-| WP8 | CNN quantization and comparison with baseline/pruned models | Partial | Add post-training summary and CNN QAT workflow |
-| WP9 | Benchmark all models for accuracy, parameters, memory, and inference efficiency | Largely missing | Add canonical benchmark script and result table |
-| WP10 | Optional ESP32 deployment or simplified simulation | Missing | Add export/simulation report or explicit scope note |
-| WP11 | Integration, reproducibility checks, documentation, exam preparation | Partial | Clean docs, reproducibility commands, and final result inventory |
+| WP1 | Literature review, repository setup, development environment | Complete | Final full-run verification still needed |
+| WP2 | ECG dataset loading, normalization, train/validation/test split, signal visualization | Complete | Regenerate final plots before report |
+| WP3 | Baseline MLP implementation and training | Complete | Rerun 20 epochs for final evidence |
+| WP4 | MLP pruning and sparsity-vs-accuracy analysis | Complete | Rerun after final MLP baseline |
+| WP5 | Fixed-point / 8-bit MLP quantization and comparison | Complete | Rerun after final MLP baseline |
+| WP6 | Baseline 1D CNN implementation, training, and evaluation | Complete | Rerun 20 epochs for final evidence |
+| WP7 | CNN pruning and compression evaluation | Complete | Rerun after final CNN baseline |
+| WP8 | CNN quantization and comparison with baseline/pruned models | Complete | Rerun PTQ and QAT for final evidence |
+| WP9 | Benchmark all models for accuracy, parameters, memory, and inference efficiency | Complete | Rerun after all final model outputs exist |
+| WP10 | Optional ESP32 deployment or simplified simulation | Complete | Rerun after final PTQ CNN/benchmark |
+| WP11 | Integration, reproducibility checks, documentation, exam preparation | In progress | Finish cleanup, smoke checks, and inventory |
 
 ## Canonical Result Folders
 
@@ -44,9 +44,10 @@ validated or regenerated:
 - `results/baseline_mlp/quantization/`
 - `results/baseline_cnn/`
 - `results/baseline_cnn/pruning/`
-- future `results/baseline_cnn/quantization/`
-- future `results/benchmarks/`
-- future `results/tinyml_simulation/`
+- `results/baseline_cnn/quantization/`
+- `results/baseline_cnn_qat/`
+- `results/benchmarks/`
+- `results/esp32/`
 
 Temporary or exploratory folders such as `tmp_*`, `results/cnn_epoch_test*`,
 `results/demo_baseline_test`, `results/manual_demo_test*`, `results/pruned`,
