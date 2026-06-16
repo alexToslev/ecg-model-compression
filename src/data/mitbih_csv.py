@@ -45,6 +45,7 @@ def load_mitbih_csv(
     seed: int = 42,
 ) -> DatasetBundle:
     """Load MIT-BIH CSV files, normalize data, and split into train/val/test."""
+    _validate_validation_fraction(validation_fraction)
     ensure_dataset_exists(data_dir)
     train_csv, test_csv = expected_csv_paths(data_dir)
 
@@ -53,6 +54,7 @@ def load_mitbih_csv(
 
     x_train_full, y_train_full = _split_features_and_labels(train_df)
     x_test, y_test = _split_features_and_labels(test_df)
+    _validate_dataset_arrays(x_train_full, y_train_full, x_test, y_test)
 
     x_train, x_val, y_train, y_val = _split_train_val(
         x_train_full, y_train_full, validation_fraction, seed
@@ -82,6 +84,14 @@ def make_demo_dataset(
     seed: int = 42,
 ) -> DatasetBundle:
     """Generate a synthetic ECG-like dataset for development and quick testing."""
+    _validate_validation_fraction(validation_fraction)
+    if samples_per_class < 3:
+        raise ValueError("samples_per_class must be at least 3 so train/validation/test splits are possible.")
+    if input_length < 8:
+        raise ValueError("input_length must be at least 8 for the CNN pooling stack.")
+    if num_classes < 2:
+        raise ValueError("num_classes must be at least 2.")
+
     rng = np.random.default_rng(seed)
     t = np.linspace(0.0, 1.0, input_length, dtype=np.float32)
 
@@ -121,7 +131,14 @@ def _split_features_and_labels(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray
     if values.ndim != 2 or values.shape[1] < 2:
         raise ValueError("CSV input must contain at least one feature column and one label column.")
     x = values[:, :-1]
-    y = values[:, -1].astype(np.int64)
+    raw_y = values[:, -1]
+    if not np.all(np.isfinite(values)):
+        raise ValueError("CSV input contains NaN or infinite values.")
+    if not np.all(np.equal(raw_y, np.floor(raw_y))):
+        raise ValueError("Class labels must be integer values in the final CSV column.")
+    y = raw_y.astype(np.int64)
+    if np.any(y < 0):
+        raise ValueError("Class labels must be non-negative integer values.")
     return x, y
 
 
@@ -131,6 +148,13 @@ def _split_train_val(
     validation_fraction: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    labels, counts = np.unique(y, return_counts=True)
+    if labels.size < 2:
+        raise ValueError("At least two classes are required for stratified train/validation splitting.")
+    if np.any(counts < 2):
+        rare = labels[counts < 2].tolist()
+        raise ValueError(f"Each class needs at least two training samples for stratified splitting. Rare classes: {rare}")
+
     return train_test_split(
         x,
         y,
@@ -174,6 +198,33 @@ def _normalize(
         )
 
     raise ValueError("normalize must be one of: none, standard, per_sample")
+
+
+def _validate_validation_fraction(validation_fraction: float) -> None:
+    if not 0.0 < validation_fraction < 1.0:
+        raise ValueError("validation_fraction must be greater than 0 and less than 1.")
+
+
+def _validate_dataset_arrays(
+    x_train: np.ndarray,
+    y_train: np.ndarray,
+    x_test: np.ndarray,
+    y_test: np.ndarray,
+) -> None:
+    if x_train.shape[1] != x_test.shape[1]:
+        raise ValueError(
+            "Train and test CSV files must have the same number of ECG feature columns. "
+            f"Got train={x_train.shape[1]} and test={x_test.shape[1]}."
+        )
+    if x_train.shape[0] != y_train.shape[0] or x_test.shape[0] != y_test.shape[0]:
+        raise ValueError("Feature and label arrays must contain the same number of rows.")
+    if x_train.shape[0] == 0 or x_test.shape[0] == 0:
+        raise ValueError("Train and test CSV files must not be empty.")
+    train_classes = set(np.unique(y_train).tolist())
+    test_classes = set(np.unique(y_test).tolist())
+    missing_from_train = sorted(test_classes - train_classes)
+    if missing_from_train:
+        raise ValueError(f"Test set contains classes missing from training data: {missing_from_train}")
 
 
 def _per_sample_standardize(x: np.ndarray) -> np.ndarray:
