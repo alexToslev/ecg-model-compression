@@ -80,6 +80,50 @@ class Conv1D:
         self.weights -= learning_rate * self.grad_weights
         self.bias -= learning_rate * self.grad_bias
 
+    def prune_by_threshold(self, threshold: float) -> None:
+        self.weights[np.abs(self.weights) <= threshold] = 0.0
+        self.bias[np.abs(self.bias) <= threshold] = 0.0
+
+    def prune_filters_by_fraction(self, prune_fraction: float) -> np.ndarray:
+        keep_filters = np.ones(self.out_channels, dtype=np.float32)
+        if prune_fraction <= 0.0:
+            return keep_filters
+        if prune_fraction >= 1.0:
+            self.weights.fill(0.0)
+            self.bias.fill(0.0)
+            return np.zeros(self.out_channels, dtype=np.float32)
+
+        filter_norms = np.linalg.norm(self.weights.reshape(self.out_channels, -1), axis=1)
+        threshold = np.percentile(filter_norms, prune_fraction * 100)
+        keep_filters = filter_norms > threshold
+        if not np.any(keep_filters):
+            keep_filters[np.argmax(filter_norms)] = True
+
+        self.weights[~keep_filters, :, :] = 0.0
+        self.bias[~keep_filters] = 0.0
+        return keep_filters.astype(np.float32)
+
+    def prune_input_channels(self, channel_mask: np.ndarray) -> None:
+        if channel_mask.shape[0] != self.in_channels:
+            raise ValueError(
+                f"Channel mask length {channel_mask.shape[0]} does not match Conv1D input channels {self.in_channels}."
+            )
+        self.weights[:, channel_mask == 0.0, :] = 0.0
+
+    @property
+    def active_filters(self) -> int:
+        active_weights = np.any(self.weights != 0.0, axis=(1, 2))
+        active_bias = self.bias != 0.0
+        return int(np.sum(active_weights | active_bias))
+
+    @property
+    def total_parameters(self) -> int:
+        return int(self.weights.size + self.bias.size)
+
+    @property
+    def zero_parameters(self) -> int:
+        return int(np.sum(self.weights == 0.0) + np.sum(self.bias == 0.0))
+
 
 class ReLU:
     def __init__(self):
@@ -164,6 +208,50 @@ class Dense:
     def update(self, learning_rate: float) -> None:
         self.weights -= learning_rate * self.grad_weights
         self.bias -= learning_rate * self.grad_bias
+
+    def prune_by_threshold(self, threshold: float) -> None:
+        self.weights[np.abs(self.weights) <= threshold] = 0.0
+        self.bias[np.abs(self.bias) <= threshold] = 0.0
+
+    def prune_neurons_by_fraction(self, prune_fraction: float) -> np.ndarray:
+        keep_neurons = np.ones(self.out_features, dtype=np.float32)
+        if prune_fraction <= 0.0:
+            return keep_neurons
+        if prune_fraction >= 1.0:
+            self.weights.fill(0.0)
+            self.bias.fill(0.0)
+            return np.zeros(self.out_features, dtype=np.float32)
+
+        neuron_norms = np.linalg.norm(self.weights, axis=0)
+        threshold = np.percentile(neuron_norms, prune_fraction * 100)
+        keep_neurons = neuron_norms > threshold
+        if not np.any(keep_neurons):
+            keep_neurons[np.argmax(neuron_norms)] = True
+
+        self.weights[:, ~keep_neurons] = 0.0
+        self.bias[~keep_neurons] = 0.0
+        return keep_neurons.astype(np.float32)
+
+    def prune_input_features(self, feature_mask: np.ndarray) -> None:
+        if feature_mask.shape[0] != self.in_features:
+            raise ValueError(
+                f"Feature mask length {feature_mask.shape[0]} does not match Dense input features {self.in_features}."
+            )
+        self.weights[feature_mask == 0.0, :] = 0.0
+
+    @property
+    def active_output_neurons(self) -> int:
+        active_weights = np.any(self.weights != 0.0, axis=0)
+        active_bias = self.bias != 0.0
+        return int(np.sum(active_weights | active_bias))
+
+    @property
+    def total_parameters(self) -> int:
+        return int(self.weights.size + self.bias.size)
+
+    @property
+    def zero_parameters(self) -> int:
+        return int(np.sum(self.weights == 0.0) + np.sum(self.bias == 0.0))
 
 
 class SoftmaxCrossEntropy:
@@ -321,6 +409,93 @@ class CNNFromScratch:
             "output_layer.weights": self.output_layer.weights,
             "output_layer.bias": self.output_layer.bias,
         }
+
+    def set_parameters(self, params: dict[str, np.ndarray]) -> None:
+        self.conv1.weights = params["conv1.weights"].astype(np.float32)
+        self.conv1.bias = params["conv1.bias"].astype(np.float32)
+        self.conv2.weights = params["conv2.weights"].astype(np.float32)
+        self.conv2.bias = params["conv2.bias"].astype(np.float32)
+        self.conv3.weights = params["conv3.weights"].astype(np.float32)
+        self.conv3.bias = params["conv3.bias"].astype(np.float32)
+        self.dense1.weights = params["dense1.weights"].astype(np.float32)
+        self.dense1.bias = params["dense1.bias"].astype(np.float32)
+        self.output_layer.weights = params["output_layer.weights"].astype(np.float32)
+        self.output_layer.bias = params["output_layer.bias"].astype(np.float32)
+
+    def prune_structured_by_fraction(self, prune_fraction: float) -> None:
+        conv1_mask = self.conv1.prune_filters_by_fraction(prune_fraction)
+        self.conv2.prune_input_channels(conv1_mask)
+
+        conv2_mask = self.conv2.prune_filters_by_fraction(prune_fraction)
+        self.conv3.prune_input_channels(conv2_mask)
+
+        conv3_mask = self.conv3.prune_filters_by_fraction(prune_fraction)
+        pooled_length = self.input_length // 8
+        dense_input_mask = np.tile(conv3_mask, pooled_length)
+        self.dense1.prune_input_features(dense_input_mask)
+
+        dense1_mask = self.dense1.prune_neurons_by_fraction(prune_fraction)
+        self.output_layer.prune_input_features(dense1_mask)
+
+    def prune_magnitude_by_fraction(self, prune_fraction: float) -> None:
+        if prune_fraction <= 0.0:
+            return
+        if prune_fraction >= 1.0:
+            for layer in self._weighted_layers():
+                layer.weights.fill(0.0)
+                layer.bias.fill(0.0)
+            return
+
+        weights = np.concatenate([np.abs(layer.weights).ravel() for layer in self._weighted_layers()])
+        threshold = np.percentile(weights, prune_fraction * 100)
+        for layer in self._weighted_layers():
+            layer.prune_by_threshold(threshold)
+
+    def _weighted_layers(self) -> list[Conv1D | Dense]:
+        return [self.conv1, self.conv2, self.conv3, self.dense1, self.output_layer]
+
+    def structured_counts(self) -> dict[str, int]:
+        total_filters = self.conv1.out_channels + self.conv2.out_channels + self.conv3.out_channels
+        active_filters = self.conv1.active_filters + self.conv2.active_filters + self.conv3.active_filters
+        total_hidden_neurons = self.dense1.out_features
+        active_hidden_neurons = self.dense1.active_output_neurons
+        return {
+            "total_conv_filters": int(total_filters),
+            "active_conv_filters": int(active_filters),
+            "pruned_conv_filters": int(total_filters - active_filters),
+            "total_hidden_neurons": int(total_hidden_neurons),
+            "active_hidden_neurons": int(active_hidden_neurons),
+            "pruned_hidden_neurons": int(total_hidden_neurons - active_hidden_neurons),
+        }
+
+    def structured_sparsity(self) -> float:
+        counts = self.structured_counts()
+        total_structures = counts["total_conv_filters"] + counts["total_hidden_neurons"]
+        pruned_structures = counts["pruned_conv_filters"] + counts["pruned_hidden_neurons"]
+        if total_structures == 0:
+            return 0.0
+        return float(pruned_structures / total_structures)
+
+    def total_parameters(self) -> int:
+        return (
+            self.conv1.total_parameters
+            + self.conv2.total_parameters
+            + self.conv3.total_parameters
+            + self.dense1.total_parameters
+            + self.output_layer.total_parameters
+        )
+
+    def zero_parameters(self) -> int:
+        return (
+            self.conv1.zero_parameters
+            + self.conv2.zero_parameters
+            + self.conv3.zero_parameters
+            + self.dense1.zero_parameters
+            + self.output_layer.zero_parameters
+        )
+
+    def sparsity(self) -> float:
+        return float(self.zero_parameters() / self.total_parameters())
 
 
 def build_tiny_cnn(input_length: int, num_classes: int) -> CNNFromScratch:
