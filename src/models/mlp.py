@@ -48,20 +48,35 @@ class Dense:
         self.weights *= self.mask
 
     def prune_neurons_by_fraction(self, prune_fraction: float) -> None:
+        self.prune_output_neurons_by_fraction(prune_fraction)
+
+    def prune_output_neurons_by_fraction(self, prune_fraction: float) -> np.ndarray:
+        neuron_mask = np.ones(self.out_features, dtype=np.float32)
         if prune_fraction <= 0.0:
-            return
+            return neuron_mask
         if prune_fraction >= 1.0:
             self.mask[:] = 0.0
             self.weights[:] = 0.0
             self.bias[:] = 0.0
-            return
+            return np.zeros(self.out_features, dtype=np.float32)
 
         neuron_norms = np.linalg.norm(self.weights, axis=0)
         threshold = np.percentile(neuron_norms, prune_fraction * 100)
         neuron_mask = (neuron_norms > threshold).astype(np.float32)
+        if not np.any(neuron_mask):
+            neuron_mask[np.argmax(neuron_norms)] = 1.0
         self.mask *= neuron_mask[np.newaxis, :]
         self.weights *= self.mask
         self.bias *= neuron_mask
+        return neuron_mask
+
+    def prune_input_features(self, input_mask: np.ndarray) -> None:
+        if input_mask.shape[0] != self.in_features:
+            raise ValueError(
+                f"Input mask length {input_mask.shape[0]} does not match Dense layer input size {self.in_features}."
+            )
+        self.mask *= input_mask[:, np.newaxis].astype(np.float32)
+        self.weights *= self.mask
 
     def fake_quantize_weights(self) -> float:
         quantized, scale = fake_quantize_tensor(self.weights)
@@ -75,6 +90,12 @@ class Dense:
     @property
     def zero_parameters(self) -> int:
         return int(np.sum(self.mask == 0.0))
+
+    @property
+    def active_output_neurons(self) -> int:
+        active_weights = np.any(self.mask != 0.0, axis=0)
+        active_bias = self.bias != 0.0
+        return int(np.sum(active_weights | active_bias))
 
 
 def fake_quantize_tensor(tensor: np.ndarray) -> tuple[np.ndarray, float]:
@@ -226,16 +247,17 @@ class ManualMLP:
     def prune_structured_by_fraction(self, prune_fraction: float) -> None:
         if prune_fraction <= 0.0:
             return
-        if prune_fraction >= 1.0:
-            for layer in self._all_dense_layers():
-                layer.prune_neurons_by_fraction(1.0)
-            return
-
-        for layer in self._all_dense_layers():
-            layer.prune_neurons_by_fraction(prune_fraction)
+        dense_layers = self._hidden_dense_layers()
+        for index, layer in enumerate(dense_layers):
+            neuron_mask = layer.prune_output_neurons_by_fraction(prune_fraction)
+            next_layer = dense_layers[index + 1] if index + 1 < len(dense_layers) else self.output_layer
+            next_layer.prune_input_features(neuron_mask)
 
     def _all_dense_layers(self) -> list[Dense]:
         return [layer for layer in self.layers if isinstance(layer, Dense)] + [self.output_layer]
+
+    def _hidden_dense_layers(self) -> list[Dense]:
+        return [layer for layer in self.layers if isinstance(layer, Dense)]
 
     def total_parameters(self) -> int:
         return sum(layer.total_parameters for layer in self._all_dense_layers())
@@ -244,6 +266,23 @@ class ManualMLP:
         return int(
             sum(layer.weights.size + layer.bias.size for layer in self._all_dense_layers())
         )
+
+    def structured_neuron_counts(self) -> dict[str, int]:
+        hidden_layers = self._hidden_dense_layers()
+        total_hidden_neurons = sum(layer.out_features for layer in hidden_layers)
+        active_hidden_neurons = sum(layer.active_output_neurons for layer in hidden_layers)
+        return {
+            "total_hidden_neurons": int(total_hidden_neurons),
+            "active_hidden_neurons": int(active_hidden_neurons),
+            "pruned_hidden_neurons": int(total_hidden_neurons - active_hidden_neurons),
+        }
+
+    def structured_sparsity(self) -> float:
+        counts = self.structured_neuron_counts()
+        total = counts["total_hidden_neurons"]
+        if total == 0:
+            return 0.0
+        return float(counts["pruned_hidden_neurons"] / total)
 
     def sparsity(self) -> float:
         zeros = sum(layer.zero_parameters for layer in self._all_dense_layers())
