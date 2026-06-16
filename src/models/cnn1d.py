@@ -10,6 +10,18 @@ def one_hot(labels: np.ndarray, num_classes: int) -> np.ndarray:
     return np.eye(num_classes, dtype=np.float32)[labels]
 
 
+def fake_quantize_tensor(tensor: np.ndarray) -> tuple[np.ndarray, float]:
+    max_val = float(np.max(np.abs(tensor)))
+    scale = max(max_val / 127.0, 1e-8)
+    quantized = np.round(tensor / scale).clip(-127, 127).astype(np.int8)
+    return quantized, scale
+
+
+def fake_quantize_activation(x: np.ndarray) -> np.ndarray:
+    quantized, scale = fake_quantize_tensor(x)
+    return quantized.astype(np.float32) * scale
+
+
 class Conv1D:
     def __init__(
         self,
@@ -79,6 +91,11 @@ class Conv1D:
     def update(self, learning_rate: float) -> None:
         self.weights -= learning_rate * self.grad_weights
         self.bias -= learning_rate * self.grad_bias
+
+    def fake_quantize_weights(self) -> float:
+        quantized, scale = fake_quantize_tensor(self.weights)
+        self.weights = quantized.astype(np.float32) * scale
+        return scale
 
     def prune_by_threshold(self, threshold: float) -> None:
         self.weights[np.abs(self.weights) <= threshold] = 0.0
@@ -209,6 +226,11 @@ class Dense:
         self.weights -= learning_rate * self.grad_weights
         self.bias -= learning_rate * self.grad_bias
 
+    def fake_quantize_weights(self) -> float:
+        quantized, scale = fake_quantize_tensor(self.weights)
+        self.weights = quantized.astype(np.float32) * scale
+        return scale
+
     def prune_by_threshold(self, threshold: float) -> None:
         self.weights[np.abs(self.weights) <= threshold] = 0.0
         self.bias[np.abs(self.bias) <= threshold] = 0.0
@@ -315,6 +337,31 @@ class CNNFromScratch:
         logits = self.output_layer.forward(x)
         return logits
 
+    def forward_quantized(self, x: np.ndarray) -> np.ndarray:
+        x = fake_quantize_activation(x)
+
+        x = self.conv1.forward(x)
+        x = self.relu1.forward(x)
+        x = fake_quantize_activation(x)
+        x = self.pool1.forward(x)
+
+        x = self.conv2.forward(x)
+        x = self.relu2.forward(x)
+        x = fake_quantize_activation(x)
+        x = self.pool2.forward(x)
+
+        x = self.conv3.forward(x)
+        x = self.relu3.forward(x)
+        x = fake_quantize_activation(x)
+        x = self.pool3.forward(x)
+
+        x = self.flatten.forward(x)
+        x = self.dense1.forward(x)
+        x = self.relu4.forward(x)
+        x = fake_quantize_activation(x)
+        logits = self.output_layer.forward(x)
+        return logits
+
     def backward(self, grad_output: np.ndarray) -> None:
         grad = self.output_layer.backward(grad_output)
         grad = self.relu4.backward(grad)
@@ -339,6 +386,13 @@ class CNNFromScratch:
         self.conv3.update(learning_rate)
         self.dense1.update(learning_rate)
         self.output_layer.update(learning_rate)
+
+    def fake_quantize_weights(self) -> None:
+        self.conv1.fake_quantize_weights()
+        self.conv2.fake_quantize_weights()
+        self.conv3.fake_quantize_weights()
+        self.dense1.fake_quantize_weights()
+        self.output_layer.fake_quantize_weights()
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         logits = self.forward(x)

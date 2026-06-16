@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Use synthetic ECG-like data for fast development and testing.",
     )
+    parser.add_argument(
+        "--quantize-aware",
+        action="store_true",
+        help="Enable quantization-aware training with fake-quantized activations and weights.",
+    )
     return parser.parse_args()
 
 
@@ -88,6 +93,7 @@ def _log_dataset_summary(dataset, args: argparse.Namespace) -> None:
     print(f"  num classes: {dataset.num_classes}")
     print(f"  normalization: {args.normalize}")
     print(f"  seed: {args.seed}")
+    print(f"  quantization-aware training: {args.quantize_aware}")
 
 
 def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[float]]:
@@ -109,17 +115,34 @@ def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[floa
             x_batch = x_train[start : start + args.batch_size]
             y_batch = y_train[start : start + args.batch_size]
 
-            logits = model.forward(x_batch)
+            if args.quantize_aware:
+                logits = model.forward_quantized(x_batch)
+            else:
+                logits = model.forward(x_batch)
             batch_loss = model.loss.forward(logits, y_batch)
             grad_logits = model.loss.backward()
             model.backward(grad_logits)
             model.update(args.learning_rate)
+            if args.quantize_aware:
+                model.fake_quantize_weights()
 
             epoch_loss += float(batch_loss) * len(x_batch)
 
         train_loss = epoch_loss / len(x_train)
-        train_accuracy = _calculate_accuracy(model, dataset.x_train, dataset.y_train, args.batch_size)
-        val_loss, val_accuracy = _evaluate_model(model, dataset.x_val, dataset.y_val, args.batch_size)
+        train_accuracy = _calculate_accuracy(
+            model,
+            dataset.x_train,
+            dataset.y_train,
+            args.batch_size,
+            quantized=args.quantize_aware,
+        )
+        val_loss, val_accuracy = _evaluate_model(
+            model,
+            dataset.x_val,
+            dataset.y_val,
+            args.batch_size,
+            quantized=args.quantize_aware,
+        )
 
         history["train_loss"].append(train_loss)
         history["train_accuracy"].append(train_accuracy)
@@ -135,19 +158,24 @@ def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[floa
     return history
 
 
-def _predict_in_batches(model, x: np.ndarray, batch_size: int) -> np.ndarray:
+def _predict_in_batches(model, x: np.ndarray, batch_size: int, quantized: bool = False) -> np.ndarray:
     predictions = []
     for start in range(0, len(x), batch_size):
-        predictions.append(model.predict(x[start : start + batch_size]))
+        x_batch = x[start : start + batch_size]
+        if quantized:
+            logits = model.forward_quantized(x_batch)
+            predictions.append(np.argmax(logits, axis=1))
+        else:
+            predictions.append(model.predict(x_batch))
     return np.concatenate(predictions)
 
 
-def _batched_loss(model, x: np.ndarray, y: np.ndarray, batch_size: int) -> float:
+def _batched_loss(model, x: np.ndarray, y: np.ndarray, batch_size: int, quantized: bool = False) -> float:
     total_loss = 0.0
     for start in range(0, len(x), batch_size):
         x_batch = x[start : start + batch_size]
         y_batch = y[start : start + batch_size]
-        logits = model.forward(x_batch)
+        logits = model.forward_quantized(x_batch) if quantized else model.forward(x_batch)
         batch_loss = model.loss.forward(logits, y_batch)
         total_loss += float(batch_loss) * len(x_batch)
     return total_loss / len(x)
@@ -158,15 +186,16 @@ def _evaluate_model(
     x: np.ndarray,
     y: np.ndarray,
     batch_size: int,
+    quantized: bool = False,
 ) -> tuple[float, float]:
-    loss = _batched_loss(model, x, y, batch_size)
-    predictions = _predict_in_batches(model, x, batch_size)
+    loss = _batched_loss(model, x, y, batch_size, quantized=quantized)
+    predictions = _predict_in_batches(model, x, batch_size, quantized=quantized)
     accuracy = float(np.mean(predictions == y))
     return float(loss), accuracy
 
 
-def _calculate_accuracy(model, x: np.ndarray, y: np.ndarray, batch_size: int) -> float:
-    predictions = _predict_in_batches(model, x, batch_size)
+def _calculate_accuracy(model, x: np.ndarray, y: np.ndarray, batch_size: int, quantized: bool = False) -> float:
+    predictions = _predict_in_batches(model, x, batch_size, quantized=quantized)
     return float(np.mean(predictions == y))
 
 
@@ -190,8 +219,19 @@ def _save_training_artifacts(
     history_path = args.output_dir / "history.csv"
     pd.DataFrame(history).to_csv(history_path, index=False)
 
-    test_loss, test_accuracy = _evaluate_model(model, dataset.x_test, dataset.y_test, args.batch_size)
-    predictions = _predict_in_batches(model, dataset.x_test, args.batch_size)
+    test_loss, test_accuracy = _evaluate_model(
+        model,
+        dataset.x_test,
+        dataset.y_test,
+        args.batch_size,
+        quantized=args.quantize_aware,
+    )
+    predictions = _predict_in_batches(
+        model,
+        dataset.x_test,
+        args.batch_size,
+        quantized=args.quantize_aware,
+    )
     report = classification_report(dataset.y_test, predictions, output_dict=True, zero_division=0)
     matrix = confusion_matrix(dataset.y_test, predictions)
 
@@ -210,6 +250,8 @@ def _save_training_artifacts(
         "normalize": args.normalize,
         "seed": args.seed,
         "demo_data": bool(args.demo_data),
+        "quantize_aware_training": bool(args.quantize_aware),
+        "training_mode": "quantization_aware" if args.quantize_aware else "float32",
         "parameters": sum(
             int(np.prod(value.shape)) for value in model.get_parameters().values()
         ),
@@ -234,7 +276,24 @@ def _save_training_artifacts(
     plot_learning_curves(pd.DataFrame(history), plots_dir / "learning_curves.png")
     plot_class_metrics(report, plots_dir / "class_metrics.png")
     plot_confusion_matrix(matrix, plots_dir / "confusion_matrix.png")
-    write_summary(args.output_dir / "baseline_summary.md", pd.DataFrame(history), metrics, report, matrix)
+    write_summary(
+        args.output_dir / "baseline_summary.md",
+        pd.DataFrame(history),
+        metrics,
+        report,
+        matrix,
+        title="Quantization-Aware CNN Summary" if args.quantize_aware else "Baseline 1D CNN Summary",
+        model_description=(
+            "A from-scratch 1D CNN was trained with fake quantization on preprocessed MIT-BIH heartbeat segments."
+            if args.quantize_aware
+            else "A small 1D CNN was trained on preprocessed MIT-BIH heartbeat segments."
+        ),
+        next_step=(
+            "Compare this QAT CNN against the float32 baseline, structured-pruned CNN, and post-training int8 CNN."
+            if args.quantize_aware
+            else "Run structured CNN pruning and int8 TensorFlow Lite quantization, then compare accuracy and model size against this float32 baseline."
+        ),
+    )
 
     print(f"[train_cnn] Saved baseline evaluation plots to {plots_dir}")
     print(json.dumps(metrics, indent=2))
