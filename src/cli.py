@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     train_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     train_parser.add_argument("--seed", type=int, default=42)
     train_parser.add_argument("--demo-data", action="store_true")
+    train_parser.add_argument("--quantize-aware", action="store_true", help="Enable quantization-aware training for the scratch CNN.")
 
     evaluate_parser = subparsers.add_parser("evaluate", help="Evaluate a trained Keras ECG model")
     evaluate_parser.add_argument("--model", type=str, default="results/baseline_cnn/tiny_ecg_cnn.keras")
@@ -86,6 +87,16 @@ def parse_args() -> argparse.Namespace:
     quantize_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     quantize_parser.add_argument("--representative-samples", type=int, default=200)
     quantize_parser.add_argument("--demo-data", action="store_true")
+
+    compare_cnn_parser = subparsers.add_parser(
+        "compare-cnn",
+        help="Compare baseline, structured-pruned, post-training quantized, and QAT CNN artifacts",
+    )
+    compare_cnn_parser.add_argument("--baseline-dir", type=str, default="results/baseline_cnn")
+    compare_cnn_parser.add_argument("--pruning-dir", type=str, default="results/baseline_cnn/pruning")
+    compare_cnn_parser.add_argument("--quantized-dir", type=str, default="results/baseline_cnn")
+    compare_cnn_parser.add_argument("--qat-dir", type=str, default=None)
+    compare_cnn_parser.add_argument("--output-dir", type=str, default="results/baseline_cnn/quantization")
 
     summarize_parser = subparsers.add_parser("summarize", help="Generate evaluation plots and a markdown summary")
     summarize_parser.add_argument("--run-dir", type=str, default="results/baseline_cnn")
@@ -161,6 +172,10 @@ def main() -> None:
         from src.compression.quantize_tflite import main as quantize_main
 
         quantize_main()
+    elif args.command == "compare-cnn":
+        from src.compare_cnn_compression import main as compare_cnn_main
+
+        compare_cnn_main()
     elif args.command == "summarize":
         from src.evaluation.summarize_baseline import main as summarize_main
 
