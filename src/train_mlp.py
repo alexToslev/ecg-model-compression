@@ -96,6 +96,7 @@ def _log_dataset_summary(dataset, args: argparse.Namespace) -> None:
     print(f"  seed: {args.seed}")
     print(f"  hidden units: {args.hidden_units}")
     print(f"  dense layers: {args.dense_layers}")
+    print(f"  quantization-aware training: {args.quantize_aware}")
 
 
 def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[float]]:
@@ -199,6 +200,8 @@ def _save_training_artifacts(
         "keras_model_path": str(model_path_for_metrics),
         "history_path": str(history_path),
         "weights_size_bytes": int(model_path.stat().st_size),
+        "quantize_aware_training": bool(args.quantize_aware),
+        "training_mode": "quantization_aware" if args.quantize_aware else "float32",
     }
     if model_path_for_metrics.exists():
         metrics["keras_model_size_bytes"] = int(model_path_for_metrics.stat().st_size)
@@ -221,9 +224,17 @@ def _save_training_artifacts(
         metrics,
         report,
         matrix,
-        title="Baseline MLP Summary",
-        model_description="A from-scratch MLP was trained on preprocessed MIT-BIH heartbeat segments.",
-        next_step="Run MLP pruning and manual 8-bit quantization, then compare accuracy, sparsity, and model size against this baseline.",
+        title="Quantization-Aware MLP Summary" if args.quantize_aware else "Baseline MLP Summary",
+        model_description=(
+            "A from-scratch MLP was trained with fake quantization on preprocessed MIT-BIH heartbeat segments."
+            if args.quantize_aware
+            else "A from-scratch MLP was trained on preprocessed MIT-BIH heartbeat segments."
+        ),
+        next_step=(
+            "Compare this QAT run against the float32 MLP baseline and post-training quantized MLP."
+            if args.quantize_aware
+            else "Run MLP pruning and manual 8-bit quantization, then compare accuracy, sparsity, and model size against this baseline."
+        ),
     )
 
     print(f"[train_mlp] Saved baseline evaluation plots to {plots_dir}")
