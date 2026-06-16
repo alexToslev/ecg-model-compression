@@ -1,0 +1,31 @@
+{
+  "original_test_loss": 0.2572873830795288,
+  "original_test_accuracy": 0.9381158661398581,
+  "quantized_test_loss": 0.25714313983917236,
+  "quantized_test_accuracy": 0.9378302470605037,
+  "accuracy_delta": -0.00028561907935442665,
+  "loss_delta": -0.0001442432403564453,
+  "prediction_agreement": 0.996810586947208,
+  "parameters": 16517,
+  "original_model_size_bytes": 66068,
+  "quantized_model_size_bytes": 16940,
+  "compression_ratio": 3.9001180637544275,
+  "size_reduction_bytes": 49128,
+  "size_reduction_percent": 74.35975056002906,
+  "calibration_samples": 200,
+  "input_scale": 0.02220472388380156,
+  "activation_scales": [
+    0.057023100965605006,
+    0.05279282697542446
+  ],
+  "weight_scales": [
+    0.0032558774384926622,
+    0.006220665034346693,
+    0.004339640534768893
+  ],
+  "bias_scales": [
+    7.229585952122866e-05,
+    0.0003547216103267602,
+    0.00022910189188759262
+  ]
+}

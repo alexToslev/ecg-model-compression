@@ -1,0 +1,50 @@
+[
+  {
+    "prune_fraction": 0.0,
+    "sparsity": 0.0,
+    "val_loss": 0.28540754318237305,
+    "val_accuracy": 0.9296187683284457,
+    "test_loss": 0.2572873830795288,
+    "test_accuracy": 0.9381158661398581
+  },
+  {
+    "prune_fraction": 0.2,
+    "sparsity": 0.20001220703125,
+    "val_loss": 0.28624483942985535,
+    "val_accuracy": 0.9300699300699301,
+    "test_loss": 0.25547730922698975,
+    "test_accuracy": 0.9385442947588899
+  },
+  {
+    "prune_fraction": 0.4,
+    "sparsity": 0.4000244140625,
+    "val_loss": 0.3045892119407654,
+    "val_accuracy": 0.9259342807729904,
+    "test_loss": 0.26142188906669617,
+    "test_accuracy": 0.9345932308278193
+  },
+  {
+    "prune_fraction": 0.6,
+    "sparsity": 0.5999755859375,
+    "val_loss": 0.367108553647995,
+    "val_accuracy": 0.9004436423791262,
+    "test_loss": 0.3110760748386383,
+    "test_accuracy": 0.9266434997857856
+  },
+  {
+    "prune_fraction": 0.8,
+    "sparsity": 0.79998779296875,
+    "val_loss": 0.5054219365119934,
+    "val_accuracy": 0.8657041882848334,
+    "test_loss": 0.37555310130119324,
+    "test_accuracy": 0.9194078164421383
+  },
+  {
+    "prune_fraction": 0.9,
+    "sparsity": 0.89996337890625,
+    "val_loss": 0.7319285869598389,
+    "val_accuracy": 0.8338972855101887,
+    "test_loss": 0.5168638229370117,
+    "test_accuracy": 0.9257866425477221
+  }
+]

@@ -1,0 +1,3 @@
+model,test_accuracy,test_loss,model_size_bytes,parameters
+original_float32_mlp,0.9381158661398581,0.2572873830795288,66068,16517
+manual_int8_quantized_mlp,0.9378302470605037,0.25714313983917236,16940,16517

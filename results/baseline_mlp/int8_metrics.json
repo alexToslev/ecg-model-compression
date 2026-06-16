@@ -1,0 +1,5 @@
+{
+  "int8_accuracy": 0.9398771837958776,
+  "tflite_size_bytes": 23824,
+  "tflite_path": "results/baseline_mlp/tiny_ecg_mlp_int8.tflite"
+}

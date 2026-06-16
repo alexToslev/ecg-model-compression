@@ -35,8 +35,8 @@
 ## Accuracy and benchmark context
 
 - Int8 test accuracy: 0.8749
-- Int8 test loss: not recorded
-- Benchmark inference time on development machine: 0.0125 ms/sample
+- Int8 test loss: 0.4586
+- Benchmark inference time on development machine: 0.0092 ms/sample
 
 ## ESP32 integration steps
 

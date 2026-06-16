@@ -1,0 +1,14 @@
+{
+  "int8_accuracy": 0.874946446422621,
+  "int8_loss": 0.4585505425930023,
+  "tflite_size_bytes": 62856,
+  "tflite_path": "results/baseline_cnn/tiny_ecg_cnn_int8.tflite",
+  "representative_samples": 200,
+  "baseline_test_accuracy": 0.8753272718617604,
+  "baseline_test_loss": 0.3835162899568988,
+  "baseline_size_bytes": 247144,
+  "accuracy_delta": -0.0003808254391394206,
+  "loss_delta": 0.07503425263610353,
+  "size_reduction_bytes": 184288,
+  "size_reduction_percent": 74.5670540251837
+}
