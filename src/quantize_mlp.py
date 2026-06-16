@@ -7,6 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.metrics import classification_report, confusion_matrix
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 from src.models.mlp import Dense, ManualMLP, ReLU, build_manual_mlp
@@ -53,15 +54,25 @@ def main() -> None:
     calibration_inputs = dataset.x_train[: args.calibration_samples]
     q_model = QuantizedManualMLP.from_float_model(float_model, calibration_inputs)
     quantized_metrics = _evaluate_quantized_model(q_model, dataset.x_test, dataset.y_test)
+    original_predictions = float_model.predict(dataset.x_test)
+    quantized_predictions = q_model.predict(dataset.x_test)
+    prediction_agreement = float(np.mean(original_predictions == quantized_predictions))
 
     metrics = {
         "original_test_loss": original_metrics[0],
         "original_test_accuracy": original_metrics[1],
         "quantized_test_loss": quantized_metrics[0],
         "quantized_test_accuracy": quantized_metrics[1],
+        "accuracy_delta": float(quantized_metrics[1] - original_metrics[1]),
+        "loss_delta": float(quantized_metrics[0] - original_metrics[0]),
+        "prediction_agreement": prediction_agreement,
+        "parameters": float_model.parameter_count(),
         "original_model_size_bytes": q_model.original_size_bytes,
         "quantized_model_size_bytes": q_model.quantized_size_bytes,
         "compression_ratio": float(q_model.original_size_bytes / q_model.quantized_size_bytes),
+        "size_reduction_bytes": int(q_model.original_size_bytes - q_model.quantized_size_bytes),
+        "size_reduction_percent": float(100.0 * (1.0 - q_model.quantized_size_bytes / q_model.original_size_bytes)),
+        "calibration_samples": int(len(calibration_inputs)),
         "input_scale": float(q_model.input_scale),
         "activation_scales": [float(scale) for scale in q_model.activation_scales],
         "weight_scales": [float(layer.weight_scale) for layer in q_model.dense_layers],
@@ -71,9 +82,16 @@ def main() -> None:
     summary_path = args.output_dir / "quantization_metrics.json"
     summary_csv_path = args.output_dir / "quantization_metrics.csv"
     pd.DataFrame([metrics]).to_csv(summary_csv_path, index=False)
+    write_comparison_table(metrics, args.output_dir / "original_vs_quantized_metrics.csv")
     summary_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
 
     save_quantized_model(q_model, args.output_dir / "baseline_mlp_quantized.npz")
+    save_prediction_reports(
+        dataset.y_test,
+        original_predictions,
+        quantized_predictions,
+        args.output_dir,
+    )
     plot_quantization_results(metrics, args.output_dir)
     write_quantization_summary(metrics, args.output_dir)
 
@@ -100,6 +118,47 @@ def _evaluate_quantized_model(model: "QuantizedManualMLP", x: np.ndarray, y: np.
     loss = model.loss.forward(logits, y)
     predictions = np.argmax(logits, axis=1)
     return float(loss), float(np.mean(predictions == y))
+
+
+def write_comparison_table(metrics: dict, output_path: Path) -> None:
+    rows = [
+        {
+            "model": "original_float32_mlp",
+            "test_accuracy": metrics["original_test_accuracy"],
+            "test_loss": metrics["original_test_loss"],
+            "model_size_bytes": metrics["original_model_size_bytes"],
+            "parameters": metrics["parameters"],
+        },
+        {
+            "model": "manual_int8_quantized_mlp",
+            "test_accuracy": metrics["quantized_test_accuracy"],
+            "test_loss": metrics["quantized_test_loss"],
+            "model_size_bytes": metrics["quantized_model_size_bytes"],
+            "parameters": metrics["parameters"],
+        },
+    ]
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+
+
+def save_prediction_reports(
+    labels: np.ndarray,
+    original_predictions: np.ndarray,
+    quantized_predictions: np.ndarray,
+    output_dir: Path,
+) -> None:
+    original_report = classification_report(labels, original_predictions, output_dict=True, zero_division=0)
+    quantized_report = classification_report(labels, quantized_predictions, output_dict=True, zero_division=0)
+    original_matrix = confusion_matrix(labels, original_predictions)
+    quantized_matrix = confusion_matrix(labels, quantized_predictions)
+
+    (output_dir / "original_classification_report.json").write_text(
+        json.dumps(original_report, indent=2), encoding="utf-8"
+    )
+    (output_dir / "quantized_classification_report.json").write_text(
+        json.dumps(quantized_report, indent=2), encoding="utf-8"
+    )
+    np.savetxt(output_dir / "original_confusion_matrix.csv", original_matrix, delimiter=",", fmt="%d")
+    np.savetxt(output_dir / "quantized_confusion_matrix.csv", quantized_matrix, delimiter=",", fmt="%d")
 
 
 def quantize_tensor(tensor: np.ndarray) -> tuple[np.ndarray, float]:
@@ -278,19 +337,35 @@ def write_quantization_summary(metrics: dict, output_dir: Path) -> None:
         "",
         "This report compares the original manual MLP against an 8-bit fixed-point quantized version.",
         "",
-        f"- Original test accuracy: {metrics['original_test_accuracy']:.4f}",
-        f"- Quantized test accuracy: {metrics['quantized_test_accuracy']:.4f}",
-        f"- Original test loss: {metrics['original_test_loss']:.4f}",
-        f"- Quantized test loss: {metrics['quantized_test_loss']:.4f}",
-        f"- Original model size (bytes): {metrics['original_model_size_bytes']}",
-        f"- Quantized model size (bytes): {metrics['quantized_model_size_bytes']}",
-        f"- Compression ratio: {metrics['compression_ratio']:.4f}",
+        "## Original vs Quantized",
+        "",
+        "| metric | original float32 MLP | manual int8 MLP | change |",
+        "|---|---:|---:|---:|",
+        f"| test accuracy | {metrics['original_test_accuracy']:.4f} | {metrics['quantized_test_accuracy']:.4f} | {metrics['accuracy_delta']:+.4f} |",
+        f"| test loss | {metrics['original_test_loss']:.4f} | {metrics['quantized_test_loss']:.4f} | {metrics['loss_delta']:+.4f} |",
+        f"| model size bytes | {metrics['original_model_size_bytes']} | {metrics['quantized_model_size_bytes']} | -{metrics['size_reduction_bytes']} |",
+        "",
+        "## Compression",
+        "",
+        f"- Compression ratio: {metrics['compression_ratio']:.4f}x",
+        f"- Size reduction: {metrics['size_reduction_percent']:.2f}%",
+        f"- Prediction agreement with original model: {metrics['prediction_agreement']:.4f}",
+        f"- Calibration samples: {metrics['calibration_samples']}",
+        f"- Parameters: {int(metrics['parameters'])}",
         "",
         "## Generated plots",
         "",
         "- `quantization_accuracy_comparison.png`",
         "- `quantization_loss_comparison.png`",
         "- `quantization_size_comparison.png`",
+        "",
+        "## Generated comparison artifacts",
+        "",
+        "- `original_vs_quantized_metrics.csv`",
+        "- `original_classification_report.json`",
+        "- `quantized_classification_report.json`",
+        "- `original_confusion_matrix.csv`",
+        "- `quantized_confusion_matrix.csv`",
         "",
         "## Notes",
         "",
