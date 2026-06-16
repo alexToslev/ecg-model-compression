@@ -61,6 +61,16 @@ def parse_args() -> argparse.Namespace:
     prune_mlp_parser.add_argument("--prune-fractions", type=str, default="0.0,0.2,0.4,0.6,0.8,0.9")
     prune_mlp_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
 
+    prune_cnn_parser = subparsers.add_parser("prune-cnn", help="Prune the scratch CNN with structured compression and evaluate compression effects")
+    prune_cnn_parser.add_argument("--weights", type=str, default="results/baseline_cnn/tiny_ecg_cnn_weights.npz")
+    prune_cnn_parser.add_argument("--data-dir", type=str, default="data/processed")
+    prune_cnn_parser.add_argument("--output-dir", type=str, default="results/baseline_cnn/pruning")
+    prune_cnn_parser.add_argument("--demo-data", action="store_true")
+    prune_cnn_parser.add_argument("--batch-size", type=int, default=128)
+    prune_cnn_parser.add_argument("--magnitude", action="store_true", help="Use unstructured magnitude pruning instead of the default structured CNN pruning.")
+    prune_cnn_parser.add_argument("--prune-fractions", type=str, default="0.0,0.2,0.4,0.6,0.8,0.9")
+    prune_cnn_parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
+
     quantize_mlp_parser = subparsers.add_parser("quantize-mlp", help="Quantize the manual MLP to 8-bit fixed-point and compare to the original model")
     quantize_mlp_parser.add_argument("--weights", type=str, default="results/baseline_mlp/baseline_mlp_weights.npz")
     quantize_mlp_parser.add_argument("--data-dir", type=str, default="data/processed")
@@ -139,6 +149,10 @@ def main() -> None:
         from src.prune_mlp import main as prune_mlp_main
 
         prune_mlp_main()
+    elif args.command == "prune-cnn":
+        from src.prune_cnn import main as prune_cnn_main
+
+        prune_cnn_main()
     elif args.command == "quantize-mlp":
         from src.quantize_mlp import main as quantize_mlp_main
 
