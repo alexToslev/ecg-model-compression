@@ -118,8 +118,8 @@ def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[floa
             epoch_loss += float(batch_loss) * len(x_batch)
 
         train_loss = epoch_loss / len(x_train)
-        train_accuracy = _calculate_accuracy(model, dataset.x_train, dataset.y_train)
-        val_loss, val_accuracy = _evaluate_model(model, dataset.x_val, dataset.y_val)
+        train_accuracy = _calculate_accuracy(model, dataset.x_train, dataset.y_train, args.batch_size)
+        val_loss, val_accuracy = _evaluate_model(model, dataset.x_val, dataset.y_val, args.batch_size)
 
         history["train_loss"].append(train_loss)
         history["train_accuracy"].append(train_accuracy)
@@ -135,16 +135,38 @@ def train_model(model, dataset, args: argparse.Namespace) -> dict[str, list[floa
     return history
 
 
-def _evaluate_model(model, x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    logits = model.forward(x)
-    loss = model.loss.forward(logits, y)
-    predictions = np.argmax(logits, axis=1)
+def _predict_in_batches(model, x: np.ndarray, batch_size: int) -> np.ndarray:
+    predictions = []
+    for start in range(0, len(x), batch_size):
+        predictions.append(model.predict(x[start : start + batch_size]))
+    return np.concatenate(predictions)
+
+
+def _batched_loss(model, x: np.ndarray, y: np.ndarray, batch_size: int) -> float:
+    total_loss = 0.0
+    for start in range(0, len(x), batch_size):
+        x_batch = x[start : start + batch_size]
+        y_batch = y[start : start + batch_size]
+        logits = model.forward(x_batch)
+        batch_loss = model.loss.forward(logits, y_batch)
+        total_loss += float(batch_loss) * len(x_batch)
+    return total_loss / len(x)
+
+
+def _evaluate_model(
+    model,
+    x: np.ndarray,
+    y: np.ndarray,
+    batch_size: int,
+) -> tuple[float, float]:
+    loss = _batched_loss(model, x, y, batch_size)
+    predictions = _predict_in_batches(model, x, batch_size)
     accuracy = float(np.mean(predictions == y))
     return float(loss), accuracy
 
 
-def _calculate_accuracy(model, x: np.ndarray, y: np.ndarray) -> float:
-    predictions = model.predict(x)
+def _calculate_accuracy(model, x: np.ndarray, y: np.ndarray, batch_size: int) -> float:
+    predictions = _predict_in_batches(model, x, batch_size)
     return float(np.mean(predictions == y))
 
 
@@ -168,8 +190,8 @@ def _save_training_artifacts(
     history_path = args.output_dir / "history.csv"
     pd.DataFrame(history).to_csv(history_path, index=False)
 
-    test_loss, test_accuracy = _evaluate_model(model, dataset.x_test, dataset.y_test)
-    predictions = model.predict(dataset.x_test)
+    test_loss, test_accuracy = _evaluate_model(model, dataset.x_test, dataset.y_test, args.batch_size)
+    predictions = _predict_in_batches(model, dataset.x_test, args.batch_size)
     report = classification_report(dataset.y_test, predictions, output_dict=True, zero_division=0)
     matrix = confusion_matrix(dataset.y_test, predictions)
 
@@ -179,6 +201,15 @@ def _save_training_artifacts(
         "test_accuracy": float(test_accuracy),
         "num_classes": dataset.num_classes,
         "input_length": dataset.input_length,
+        "architecture": "from_scratch_1d_cnn",
+        "layers": ["Conv1D", "ReLU", "MaxPool1D", "Conv1D", "ReLU", "MaxPool1D", "Conv1D", "ReLU", "MaxPool1D", "Flatten", "Dense", "ReLU", "Dense"],
+        "epochs": args.epochs,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "validation_fraction": args.validation_fraction,
+        "normalize": args.normalize,
+        "seed": args.seed,
+        "demo_data": bool(args.demo_data),
         "parameters": sum(
             int(np.prod(value.shape)) for value in model.get_parameters().values()
         ),
