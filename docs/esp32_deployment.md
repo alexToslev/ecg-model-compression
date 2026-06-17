@@ -23,13 +23,19 @@ Export one quantized ECG test sample:
 C:\venvs\ecg\Scripts\python.exe -m src.deployment.export_test_sample --data-dir data/processed --sample-index 0
 ```
 
+For a stronger ESP32 test, export one sample from each available heartbeat class:
+
+```bash
+C:\venvs\ecg\Scripts\python.exe -m src.deployment.export_test_sample --data-dir data/processed --samples-per-class 1
+```
+
 These commands write:
 
 - `esp32/ecg_tflite_micro/model_data.h`
 - `esp32/ecg_tflite_micro/test_sample.h`
 - `esp32/ecg_tflite_micro/test_sample.json`
 
-The ESP32 will not train the model. It will load the already trained int8 model, copy one quantized ECG sample into the input tensor, run inference, and print the predicted class over Serial.
+The ESP32 will not train the model. It will load the already trained int8 model, copy quantized ECG samples into the input tensor, run inference, and print the predicted class over Serial.
 
 ## Step 2: Arduino IDE Sketch
 
@@ -42,7 +48,7 @@ esp32/ecg_tflite_micro/ecg_tflite_micro.ino
 The sketch includes:
 
 - `model_data.h` - the int8 TensorFlow Lite model as a C array
-- `test_sample.h` - one quantized ECG heartbeat and its expected label
+- `test_sample.h` - one or more quantized ECG heartbeats and their expected labels
 
 Initial Arduino IDE settings:
 
@@ -62,11 +68,12 @@ If Arduino IDE reports that these files are missing, install a TensorFlow Lite M
 The sketch prints:
 
 - model size
-- expected label
-- predicted label
+- expected labels
+- predicted labels
 - raw int8 output scores
 - dequantized output scores
 - inference time in microseconds
+- number of correct samples
 - free heap before and after inference
 
 ## Board
