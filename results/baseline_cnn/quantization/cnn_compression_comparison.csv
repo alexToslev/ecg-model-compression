@@ -1,5 +1,0 @@
-model,method,test_accuracy,test_loss,size_bytes,parameters,parameter_sparsity,structured_sparsity,epochs,source
-baseline_cnn,float32,0.8753272718617604,0.3835162899568988,247144,49781,0.0,0.0,20,results/baseline_cnn
-structured_pruned_cnn,structured_pruning,0.9245965630504116,0.3815917491475887,123924,30981,0.3776541250677969,0.2166666666666666,20,results/baseline_cnn/pruning/pruning_metrics.csv
-ptq_int8_cnn,post_training_quantization,0.874946446422621,0.4585505425930023,62856,49781,0.0,0.0,20,results/baseline_cnn/int8_metrics.json
-qat_cnn,quantization_aware_training,0.8455276812491075,0.4753649151175696,247144,49781,0.0,0.0,20,results/baseline_cnn_qat

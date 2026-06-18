@@ -13,11 +13,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Export an int8 ECG CNN TFLite model for TinyML/ESP32 simulation and deployment planning."
     )
-    parser.add_argument("--model", type=Path, default=Path("results/baseline_cnn/tiny_ecg_cnn_int8.tflite"))
-    parser.add_argument("--metrics", type=Path, default=Path("results/baseline_cnn/int8_metrics.json"))
-    parser.add_argument("--benchmark", type=Path, default=Path("results/benchmarks/model_benchmark_comparison.csv"))
+    parser.add_argument("--model", type=Path, default=Path("results/improved_cnn/tiny_ecg_cnn_int8.tflite"))
+    parser.add_argument("--metrics", type=Path, default=Path("results/improved_cnn/int8_metrics.json"))
     parser.add_argument("--output-dir", type=Path, default=Path("results/esp32"))
-    parser.add_argument("--model-name", type=str, default="tiny_ecg_cnn_int8")
+    parser.add_argument("--model-name", type=str, default="improved_ecg_cnn_int8")
     parser.add_argument("--arena-bytes", type=int, default=None)
     parser.add_argument("--flash-budget-bytes", type=int, default=4 * 1024 * 1024)
     parser.add_argument("--sram-budget-bytes", type=int, default=320 * 1024)
@@ -33,7 +32,6 @@ def main() -> None:
     model_bytes = args.model.read_bytes()
     model_info = inspect_tflite_model(args.model)
     metrics = load_json(args.metrics)
-    benchmark_row = load_benchmark_row(args.benchmark, "ptq_int8_cnn")
 
     arena_bytes = args.arena_bytes or estimate_tensor_arena_bytes(model_info)
     decision = deployment_decision(
@@ -67,7 +65,6 @@ def main() -> None:
         "tensor_bytes_observed_by_interpreter": model_info.get("tensor_bytes"),
         "io_tensor_bytes": model_info.get("io_tensor_bytes"),
         "int8_metrics": metrics,
-        "benchmark_row": benchmark_row,
         "notes": [
             "This is an export and simulation report, not proof of a flashed ESP32 run.",
             "Tensor arena is estimated from the local TFLite interpreter tensor shapes; final firmware may need tuning.",
@@ -87,17 +84,6 @@ def load_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except ValueError:
         return {}
-
-
-def load_benchmark_row(path: Path, model_name: str) -> dict:
-    if not path.exists():
-        return {}
-    frame = pd.read_csv(path)
-    matches = frame[frame["model"] == model_name]
-    if matches.empty:
-        return {}
-    row = matches.iloc[0].replace({np.nan: None})
-    return row.to_dict()
 
 
 def inspect_tflite_model(model_path: Path) -> dict:
@@ -297,7 +283,6 @@ def write_arduino_sketch(model_name: str, arena_bytes: int, output_path: Path) -
 
 def write_markdown_report(report: dict, output_path: Path) -> None:
     metrics = report.get("int8_metrics", {})
-    benchmark = report.get("benchmark_row", {})
     input_info = report.get("input") or {}
     output_info = report.get("output") or {}
     operators = report.get("operators") or []
@@ -337,11 +322,10 @@ def write_markdown_report(report: dict, output_path: Path) -> None:
         "",
         ", ".join(f"`{op}`" for op in operators) if operators else "Operator list unavailable.",
         "",
-        "## Accuracy and benchmark context",
+        "## Accuracy context",
         "",
         f"- Int8 test accuracy: {format_metric(metrics.get('int8_accuracy'))}",
         f"- Int8 test loss: {format_metric(metrics.get('int8_loss'))}",
-        f"- Benchmark inference time on development machine: {format_metric(benchmark.get('inference_ms_per_sample'))} ms/sample",
         "",
         "## ESP32 integration steps",
         "",
@@ -351,7 +335,7 @@ def write_markdown_report(report: dict, output_path: Path) -> None:
         "4. Replace the zero-filled input sample with a normalized ECG heartbeat window of length 187.",
         "5. Flash the board and check whether `AllocateTensors()` succeeds.",
         "6. If allocation fails, increase `kTensorArenaSize` or reduce the model.",
-        "7. Measure serial `inference_us` on the board and compare it against the desktop benchmark.",
+        "7. Measure serial `inference_us` on the board and record the real ESP32 inference time.",
         "",
         "## Limitations",
         "",

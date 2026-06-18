@@ -1,30 +1,45 @@
-# ECG Model Compression
+# ECG CNN Improvements
 
-From-scratch ECG classification and model compression for resource-constrained hardware.
+This branch focuses only on improving the 1D CNN for MIT-BIH heartbeat classification.
 
-The project compares:
-
-- baseline MLP
-- structured-pruned MLP
-- quantized MLP
-- baseline 1D CNN
-- structured-pruned 1D CNN
-- post-training int8 CNN
-- quantization-aware-trained CNN
-- unified benchmark and ESP32/TinyML export simulation
-
-The CNN and MLP training code is implemented manually with NumPy layers. Keras/TensorFlow Lite is used only for export and deployment-oriented quantization.
+The goal is to address the main weakness seen in earlier experiments: high overall accuracy can hide poor recall for rare heartbeat classes, especially class 1 and class 3.
 
 ## Dataset
 
-Use the preprocessed MIT-BIH heartbeat CSV format:
+Use the preprocessed MIT-BIH heartbeat CSV files:
 
 ```text
 data/processed/mitbih_train.csv
 data/processed/mitbih_test.csv
 ```
 
-Each row contains one heartbeat segment and the class label in the final column. `data/processed/` is intentionally ignored by Git.
+Each row contains 187 ECG values and the class label in the final column.
+
+The PTBDB files from the Kaggle dataset are not mixed into this branch because they are a different binary normal/abnormal task. This branch keeps the MIT-BIH 5-class task consistent.
+
+## Improved CNN
+
+The improved model uses:
+
+- Conv1D 16 filters, kernel size 7
+- BatchNorm, ReLU, MaxPool
+- Conv1D 32 filters, kernel size 5
+- BatchNorm, ReLU, MaxPool
+- Conv1D 64 filters, kernel size 3
+- BatchNorm, ReLU
+- GlobalAveragePooling1D
+- Dense 32
+- Dropout
+- Dense 5 with softmax
+
+Training improvements:
+
+- Adam optimizer
+- class-weighted loss for rare classes
+- optional rare-class ECG augmentation
+- early stopping
+- learning-rate reduction on plateau
+- macro F1 and weighted F1 saved in metrics
 
 ## Setup
 
@@ -33,138 +48,72 @@ pip install -r requirements.txt
 python -m src --help
 ```
 
-For quick checks without the real dataset, add `--demo-data` to supported commands.
+## Train Improved CNN
 
-## Final Full Pipeline
-
-Run these commands after the repository cleanup is committed. These commands regenerate the final report-ready artifacts from scratch.
-
-### 1. Dataset Visualizations
-
-```bash
-python -m src visualize --data-dir data/processed --output-dir results/dataset_visualizations
-```
-
-### 2. Baseline MLP
-
-```bash
-python -m src train-mlp --data-dir data/processed --epochs 20 --output-dir results/baseline_mlp
-```
-
-### 3. Structured-Pruned MLP
-
-```bash
-python -m src prune-mlp \
-  --weights results/baseline_mlp/baseline_mlp_weights.npz \
-  --data-dir data/processed \
-  --output-dir results/baseline_mlp/pruning_structured
-```
-
-### 4. Quantized MLP
-
-```bash
-python -m src quantize-mlp \
-  --weights results/baseline_mlp/baseline_mlp_weights.npz \
-  --data-dir data/processed \
-  --output-dir results/baseline_mlp/quantization
-```
-
-### 5. Baseline CNN
+Recommended first run:
 
 ```bash
 python -m src train \
   --data-dir data/processed \
-  --epochs 20 \
+  --output-dir results/improved_cnn \
+  --epochs 30 \
   --batch-size 128 \
-  --output-dir results/baseline_cnn
+  --class-weights balanced \
+  --augment-rare-classes \
+  --rare-target-count 2000
 ```
 
-### 6. Structured-Pruned CNN
+For a quick smoke test without the real dataset:
 
 ```bash
-python -m src prune-cnn \
-  --weights results/baseline_cnn/tiny_ecg_cnn_weights.npz \
-  --data-dir data/processed \
-  --output-dir results/baseline_cnn/pruning
+python -m src train --demo-data --epochs 1 --output-dir results/smoke_improved_cnn
 ```
 
-### 7. Post-Training Quantized CNN
+## Evaluate
+
+```bash
+python -m src evaluate \
+  --model results/improved_cnn/tiny_ecg_cnn.keras \
+  --data-dir data/processed
+```
+
+## Quantize To Int8 TensorFlow Lite
 
 ```bash
 python -m src quantize \
-  --model results/baseline_cnn/tiny_ecg_cnn.keras \
+  --model results/improved_cnn/tiny_ecg_cnn.keras \
   --data-dir data/processed \
-  --output results/baseline_cnn/tiny_ecg_cnn_int8.tflite
+  --output results/improved_cnn/tiny_ecg_cnn_int8.tflite
 ```
 
-### 8. Quantization-Aware-Trained CNN
+## Summarize
 
 ```bash
-python -m src train \
-  --data-dir data/processed \
-  --epochs 20 \
-  --batch-size 128 \
-  --quantize-aware \
-  --output-dir results/baseline_cnn_qat
+python -m src summarize \
+  --run-dir results/improved_cnn \
+  --quantized-dir results/improved_cnn
 ```
 
-### 9. CNN Compression Comparison
+## ESP32 Export Planning
+
+After quantization:
 
 ```bash
-python -m src compare-cnn \
-  --baseline-dir results/baseline_cnn \
-  --pruning-dir results/baseline_cnn/pruning \
-  --quantized-dir results/baseline_cnn \
-  --qat-dir results/baseline_cnn_qat \
-  --output-dir results/baseline_cnn/quantization
-```
-
-### 10. Unified Benchmark
-
-```bash
-MPLCONFIGDIR=/tmp/mplconfig python -m src benchmark \
-  --data-dir data/processed \
-  --output-dir results/benchmarks \
-  --timing-samples 512 \
-  --repeats 5
-```
-
-### 11. ESP32 / TinyML Export Simulation
-
-```bash
-MPLCONFIGDIR=/tmp/mplconfig python -m src export-tinyml \
-  --model results/baseline_cnn/tiny_ecg_cnn_int8.tflite \
-  --metrics results/baseline_cnn/int8_metrics.json \
-  --benchmark results/benchmarks/model_benchmark_comparison.csv \
+python -m src export-tinyml \
+  --model results/improved_cnn/tiny_ecg_cnn_int8.tflite \
+  --metrics results/improved_cnn/int8_metrics.json \
   --output-dir results/esp32
 ```
 
-## Smoke Checks
+## What To Check
 
-Use these before long runs:
+Do not judge only by total accuracy. Check:
 
-```bash
-python -m compileall src
-python -m src train-mlp --demo-data --epochs 1 --output-dir /tmp/ecg_smoke_mlp
-python -m src train --demo-data --epochs 1 --output-dir /tmp/ecg_smoke_cnn
-python -m src train --demo-data --epochs 1 --quantize-aware --output-dir /tmp/ecg_smoke_cnn_qat
-```
+- class 1 recall
+- class 3 recall
+- macro F1
+- confusion matrix
+- int8 accuracy after quantization
+- model size and ESP32 memory estimate
 
-## Key Documentation
-
-- `docs/work_packages.md`
-- `docs/setup_reproducibility.md`
-- `docs/dataset_workflow.md`
-- `docs/mlp_workflow.md`
-- `docs/mlp_pruning_workflow.md`
-- `docs/mlp_quantization_workflow.md`
-- `docs/cnn_baseline_workflow.md`
-- `docs/cnn_pruning_workflow.md`
-- `docs/cnn_quantization_workflow.md`
-- `docs/unified_benchmark_workflow.md`
-- `docs/esp32_tinyml_workflow.md`
-- `docs/final_result_inventory.md`
-
-## Result Policy
-
-Generated datasets and experiment outputs are ignored by Git. Commit only selected final evidence with `git add -f results/...` when needed. Temporary/debug runs should go under `/tmp/...` or `tmp_*`.
+The expected tradeoff is that class weighting may reduce class 0 accuracy a little, but should improve rare-class recall if the model learns useful minority-class patterns.

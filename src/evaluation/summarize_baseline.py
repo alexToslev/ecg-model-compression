@@ -20,7 +20,7 @@ CLASS_NAMES = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create plots and a short written summary for a baseline run.")
-    parser.add_argument("--run-dir", type=Path, default=Path("results/baseline_cnn"))
+    parser.add_argument("--run-dir", type=Path, default=Path("results/improved_cnn"))
     parser.add_argument(
         "--quantized-dir",
         type=Path,
@@ -76,18 +76,10 @@ def main() -> None:
 
 
 def _summary_text_for_run(run_dir: Path) -> dict[str, str]:
-    run_name = run_dir.name.lower()
-    if "mlp" in run_name:
-        return {
-            "title": "Baseline MLP Summary",
-            "model_description": "A from-scratch MLP was trained on preprocessed MIT-BIH heartbeat segments.",
-            "next_step": "Run MLP pruning and manual 8-bit quantization, then compare accuracy, sparsity, and model size against this baseline.",
-        }
-
     return {
-        "title": "Baseline 1D CNN Summary",
-        "model_description": "A small 1D CNN was trained on preprocessed MIT-BIH heartbeat segments.",
-        "next_step": "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
+        "title": "Improved 1D CNN Summary",
+        "model_description": "A class-weighted improved 1D CNN was trained on preprocessed MIT-BIH heartbeat segments.",
+        "next_step": "Run int8 TensorFlow Lite quantization and compare accuracy, macro F1, minority-class recall, and model size against this float32 model.",
     }
 
 
