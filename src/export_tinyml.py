@@ -13,8 +13,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Export an int8 ECG CNN TFLite model for TinyML/ESP32 simulation and deployment planning."
     )
-    parser.add_argument("--model", type=Path, default=Path("results/improved_cnn/tiny_ecg_cnn_int8.tflite"))
-    parser.add_argument("--metrics", type=Path, default=Path("results/improved_cnn/int8_metrics.json"))
+    parser.add_argument("--model", type=Path, default=Path("results/improved_cnn_scratch/tiny_ecg_cnn_int8.tflite"))
+    parser.add_argument("--metrics", type=Path, default=Path("results/improved_cnn_scratch/int8_metrics.json"))
     parser.add_argument("--output-dir", type=Path, default=Path("results/esp32"))
     parser.add_argument("--model-name", type=str, default="improved_ecg_cnn_int8")
     parser.add_argument("--arena-bytes", type=int, default=None)

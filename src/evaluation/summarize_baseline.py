@@ -20,7 +20,7 @@ CLASS_NAMES = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create plots and a short written summary for a baseline run.")
-    parser.add_argument("--run-dir", type=Path, default=Path("results/improved_cnn"))
+    parser.add_argument("--run-dir", type=Path, default=Path("results/improved_cnn_scratch"))
     parser.add_argument(
         "--quantized-dir",
         type=Path,

@@ -12,7 +12,7 @@ from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate a trained Keras ECG model.")
-    parser.add_argument("--model", type=Path, default=Path("results/improved_cnn/tiny_ecg_cnn.keras"))
+    parser.add_argument("--model", type=Path, default=Path("results/improved_cnn_scratch/tiny_ecg_cnn.keras"))
     parser.add_argument("--data-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     parser.add_argument("--demo-data", action="store_true")

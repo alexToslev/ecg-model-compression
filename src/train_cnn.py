@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 from sklearn.metrics import classification_report, confusion_matrix
 
 from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
@@ -22,109 +22,65 @@ from src.models.cnn1d import build_improved_cnn
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train an improved 1D CNN for imbalanced MIT-BIH heartbeat classification."
+        description="Train a from-scratch 1D CNN with class weighting and rare-class augmentation."
     )
     parser.add_argument("--data-dir", type=Path, default=Path("data/processed"))
-    parser.add_argument("--output-dir", type=Path, default=Path("results/improved_cnn"))
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--output-dir", type=Path, default=Path("results/improved_cnn_scratch"))
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--optimizer", choices=["sgd", "adam"], default="adam")
     parser.add_argument("--dropout-rate", type=float, default=0.2)
     parser.add_argument("--validation-fraction", type=float, default=0.15)
     parser.add_argument("--normalize", choices=["none", "standard", "per_sample"], default="none")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--demo-data", action="store_true")
-    parser.add_argument(
-        "--class-weights",
-        choices=["balanced", "none"],
-        default="balanced",
-        help="Use a stronger loss penalty for rare classes.",
-    )
-    parser.add_argument(
-        "--augment-rare-classes",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Create mild augmented copies for rare training classes.",
-    )
-    parser.add_argument(
-        "--rare-target-count",
-        type=int,
-        default=2000,
-        help="Maximum target count for each rare class after augmentation.",
-    )
-    parser.add_argument(
-        "--rare-threshold",
-        type=float,
-        default=0.2,
-        help="Classes below this fraction of the largest class are treated as rare.",
-    )
+    parser.add_argument("--max-train-samples", type=int, default=None)
+    parser.add_argument("--class-weights", choices=["balanced", "none"], default="balanced")
+    parser.add_argument("--class-weight-cap", type=float, default=10.0)
+    parser.add_argument("--augment-rare-classes", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--rare-target-count", type=int, default=2000)
+    parser.add_argument("--rare-threshold", type=float, default=0.2)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    set_reproducible_seed(args.seed)
+    np.random.seed(args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     dataset = load_dataset(args)
     save_dataset_visualizations(dataset, args)
 
     class_weights = (
-        calculate_class_weights(dataset.y_train, dataset.num_classes)
+        calculate_class_weights(dataset.y_train, dataset.num_classes, args.class_weight_cap)
         if args.class_weights == "balanced"
         else None
     )
     x_train, y_train, augmentation_report = prepare_training_data(dataset, args)
+    if args.max_train_samples is not None and args.max_train_samples < len(x_train):
+        rng = np.random.default_rng(args.seed)
+        chosen = rng.choice(len(x_train), size=args.max_train_samples, replace=False)
+        x_train = x_train[chosen]
+        y_train = y_train[chosen]
 
     model = build_improved_cnn(
         input_length=dataset.input_length,
         num_classes=dataset.num_classes,
         dropout_rate=args.dropout_rate,
     )
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=args.learning_rate),
-        loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"],
-    )
 
-    callbacks = [
-        tf.keras.callbacks.EarlyStopping(
-            monitor="val_loss",
-            patience=8,
-            restore_best_weights=True,
-        ),
-        tf.keras.callbacks.ReduceLROnPlateau(
-            monitor="val_loss",
-            factor=0.5,
-            patience=3,
-            min_lr=1e-5,
-        ),
-    ]
+    print_dataset_summary(dataset, x_train, args, class_weights, augmentation_report)
+    start_time = time.perf_counter()
+    history = train_model(model, x_train, y_train, dataset, args, class_weights)
+    training_seconds = time.perf_counter() - start_time
 
-    print_dataset_summary(dataset, args, class_weights, augmentation_report)
-    history = model.fit(
-        x_train,
-        y_train,
-        validation_data=(dataset.x_val, dataset.y_val),
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        class_weight=class_weights,
-        callbacks=callbacks,
-        verbose=2,
-    )
-
-    save_artifacts(model, history, dataset, args, class_weights, augmentation_report)
+    save_artifacts(model, history, dataset, args, class_weights, augmentation_report, training_seconds)
 
 
 def load_dataset(args: argparse.Namespace):
     if args.demo_data:
-        print("[train_cnn] Using synthetic demo dataset.")
-        return make_demo_dataset(
-            validation_fraction=args.validation_fraction,
-            seed=args.seed,
-        )
-
-    print(f"[train_cnn] Loading MIT-BIH dataset from {args.data_dir}")
+        return make_demo_dataset(validation_fraction=args.validation_fraction, seed=args.seed)
     return load_mitbih_csv(
         data_dir=args.data_dir,
         validation_fraction=args.validation_fraction,
@@ -133,10 +89,78 @@ def load_dataset(args: argparse.Namespace):
     )
 
 
-def calculate_class_weights(labels: np.ndarray, num_classes: int) -> dict[int, float]:
+def train_model(model, x_train, y_train, dataset, args, class_weights):
+    history = {
+        "train_loss": [],
+        "train_accuracy": [],
+        "val_loss": [],
+        "val_accuracy": [],
+    }
+
+    for epoch in range(1, args.epochs + 1):
+        order = np.random.permutation(len(x_train))
+        x_epoch = x_train[order]
+        y_epoch = y_train[order]
+        epoch_loss = 0.0
+
+        for start in range(0, len(x_epoch), args.batch_size):
+            x_batch = x_epoch[start : start + args.batch_size]
+            y_batch = y_epoch[start : start + args.batch_size]
+
+            logits = model.forward(x_batch, training=True)
+            batch_loss = model.loss.forward(logits, y_batch, class_weights=class_weights)
+            grad_logits = model.loss.backward()
+            model.backward(grad_logits)
+            model.update(args.learning_rate, optimizer=args.optimizer)
+            epoch_loss += batch_loss * len(x_batch)
+
+        train_loss = epoch_loss / len(x_train)
+        train_accuracy = accuracy(model, x_train, y_train, args.batch_size)
+        val_loss, val_accuracy = evaluate_loss_accuracy(model, dataset.x_val, dataset.y_val, args.batch_size, class_weights)
+        history["train_loss"].append(float(train_loss))
+        history["train_accuracy"].append(float(train_accuracy))
+        history["val_loss"].append(float(val_loss))
+        history["val_accuracy"].append(float(val_accuracy))
+
+        print(
+            f"epoch={epoch} loss={train_loss:.4f} train_accuracy={train_accuracy:.4f} "
+            f"val_loss={val_loss:.4f} val_accuracy={val_accuracy:.4f}"
+        )
+
+    return history
+
+
+def evaluate_loss_accuracy(model, x, y, batch_size: int, class_weights=None) -> tuple[float, float]:
+    total_loss = 0.0
+    predictions = []
+    for start in range(0, len(x), batch_size):
+        x_batch = x[start : start + batch_size]
+        y_batch = y[start : start + batch_size]
+        logits = model.forward(x_batch, training=False)
+        total_loss += model.loss.forward(logits, y_batch, class_weights=class_weights) * len(x_batch)
+        predictions.append(np.argmax(logits, axis=1))
+    y_pred = np.concatenate(predictions)
+    return float(total_loss / len(x)), float(np.mean(y_pred == y))
+
+
+def accuracy(model, x, y, batch_size: int) -> float:
+    predictions = predict_in_batches(model, x, batch_size)
+    return float(np.mean(predictions == y))
+
+
+def predict_in_batches(model, x, batch_size: int) -> np.ndarray:
+    predictions = []
+    for start in range(0, len(x), batch_size):
+        logits = model.forward(x[start : start + batch_size], training=False)
+        predictions.append(np.argmax(logits, axis=1))
+    return np.concatenate(predictions)
+
+
+def calculate_class_weights(labels: np.ndarray, num_classes: int, weight_cap: float) -> dict[int, float]:
     counts = np.bincount(labels, minlength=num_classes).astype(np.float32)
     total = float(np.sum(counts))
     weights = total / (num_classes * np.maximum(counts, 1.0))
+    weights = np.minimum(weights, weight_cap)
     return {class_id: float(weights[class_id]) for class_id in range(num_classes)}
 
 
@@ -144,7 +168,7 @@ def prepare_training_data(dataset, args: argparse.Namespace) -> tuple[np.ndarray
     if not args.augment_rare_classes:
         return dataset.x_train, dataset.y_train, {"enabled": False}
 
-    x_aug, y_aug, report = augment_rare_classes(
+    return augment_rare_classes(
         dataset.x_train,
         dataset.y_train,
         num_classes=dataset.num_classes,
@@ -152,7 +176,6 @@ def prepare_training_data(dataset, args: argparse.Namespace) -> tuple[np.ndarray
         rare_threshold=args.rare_threshold,
         seed=args.seed,
     )
-    return x_aug, y_aug, report
 
 
 def augment_rare_classes(
@@ -170,7 +193,7 @@ def augment_rare_classes(
 
     augmented_x = [x_train]
     augmented_y = [y_train]
-    generated_per_class: dict[int, int] = {}
+    generated_per_class = {}
 
     for class_id, count in enumerate(counts):
         if count == 0 or count >= rare_limit:
@@ -204,55 +227,45 @@ def augment_rare_classes(
             "target_count": target_count,
             "original_counts": {str(i): int(counts[i]) for i in range(num_classes)},
             "generated_per_class": {str(k): int(v) for k, v in generated_per_class.items()},
-            "final_counts": {
-                str(i): int(np.sum(y_out == i))
-                for i in range(num_classes)
-            },
+            "final_counts": {str(i): int(np.sum(y_out == i)) for i in range(num_classes)},
         },
     )
 
 
 def augment_one_sample(sample: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     augmented = sample.astype(np.float32).copy()
-    augmented *= rng.uniform(0.9, 1.1)
-    augmented += rng.normal(0.0, 0.01, size=augmented.shape).astype(np.float32)
-    augmented += rng.uniform(-0.02, 0.02)
+    augmented *= rng.uniform(0.95, 1.05)
+    augmented += rng.normal(0.0, 0.005, size=augmented.shape).astype(np.float32)
+    augmented += rng.uniform(-0.01, 0.01)
 
-    shift = int(rng.integers(-3, 4))
+    shift = int(rng.integers(-2, 3))
     if shift != 0:
         augmented = np.roll(augmented, shift=shift, axis=0)
         if shift > 0:
             augmented[:shift] = augmented[shift]
         else:
             augmented[shift:] = augmented[shift - 1]
-
     return augmented.astype(np.float32)
 
 
-def save_artifacts(
-    model: tf.keras.Model,
-    history,
-    dataset,
-    args: argparse.Namespace,
-    class_weights: dict[int, float] | None,
-    augmentation_report: dict,
-) -> None:
-    model_path = args.output_dir / "tiny_ecg_cnn.keras"
-    model.save(model_path)
+def save_artifacts(model, history, dataset, args, class_weights, augmentation_report, training_seconds: float) -> None:
+    np.savez(args.output_dir / "tiny_ecg_cnn_weights.npz", **model.get_parameters())
 
-    history_frame = pd.DataFrame(
-        {
-            "train_loss": history.history["loss"],
-            "train_accuracy": history.history["accuracy"],
-            "val_loss": history.history["val_loss"],
-            "val_accuracy": history.history["val_accuracy"],
-        }
-    )
+    keras_model_path = args.output_dir / "tiny_ecg_cnn.keras"
+    keras_model_saved = False
+    try:
+        model.save_keras_model(keras_model_path)
+        keras_model_saved = True
+    except RuntimeError as exc:
+        print(f"Warning: Keras export skipped: {exc}")
+
+    history_frame = pd.DataFrame(history)
     history_frame.to_csv(args.output_dir / "history.csv", index=False)
 
-    test_loss, test_accuracy = model.evaluate(dataset.x_test, dataset.y_test, verbose=0)
-    probabilities = model.predict(dataset.x_test, batch_size=args.batch_size, verbose=0)
-    predictions = np.argmax(probabilities, axis=1)
+    test_loss, test_accuracy = evaluate_loss_accuracy(
+        model, dataset.x_test, dataset.y_test, args.batch_size, class_weights
+    )
+    predictions = predict_in_batches(model, dataset.x_test, args.batch_size)
     report = classification_report(dataset.y_test, predictions, output_dict=True, zero_division=0)
     matrix = confusion_matrix(dataset.y_test, predictions)
 
@@ -263,39 +276,41 @@ def save_artifacts(
         "weighted_f1": float(report["weighted avg"]["f1-score"]),
         "num_classes": dataset.num_classes,
         "input_length": dataset.input_length,
-        "architecture": "improved_keras_1d_cnn",
+        "architecture": "from_scratch_weighted_augmented_1d_cnn",
         "layers": [
             "Conv1D(16,k=7)",
-            "BatchNorm",
             "ReLU",
             "MaxPool1D",
             "Conv1D(32,k=5)",
-            "BatchNorm",
             "ReLU",
             "MaxPool1D",
             "Conv1D(64,k=3)",
-            "BatchNorm",
             "ReLU",
-            "GlobalAveragePooling1D",
+            "GlobalAveragePool1D",
             "Dense(32)",
+            "ReLU",
             "Dropout",
-            "Dense(5,softmax)",
+            "Dense(5)",
+            "WeightedSoftmaxCrossEntropy",
         ],
-        "epochs_requested": args.epochs,
-        "epochs_completed": len(history_frame),
+        "epochs": args.epochs,
         "batch_size": args.batch_size,
         "learning_rate": args.learning_rate,
-        "optimizer": "Adam",
+        "optimizer": args.optimizer,
         "dropout_rate": args.dropout_rate,
         "validation_fraction": args.validation_fraction,
         "normalize": args.normalize,
         "seed": args.seed,
         "class_weights": None if class_weights is None else {str(k): v for k, v in class_weights.items()},
+        "class_weight_cap": args.class_weight_cap,
         "augmentation": augmentation_report,
-        "parameters": int(model.count_params()),
-        "keras_model_path": str(model_path),
-        "keras_model_size_bytes": int(model_path.stat().st_size),
+        "parameters": model.parameter_count(),
+        "training_seconds": float(training_seconds),
+        "weights_path": str(args.output_dir / "tiny_ecg_cnn_weights.npz"),
     }
+    if keras_model_saved:
+        metrics["keras_model_path"] = str(keras_model_path)
+        metrics["keras_model_size_bytes"] = int(keras_model_path.stat().st_size)
 
     (args.output_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     (args.output_dir / "classification_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -306,48 +321,37 @@ def save_artifacts(
     plot_learning_curves(history_frame, plots_dir / "learning_curves.png")
     plot_class_metrics(report, plots_dir / "class_metrics.png")
     plot_confusion_matrix(matrix, plots_dir / "confusion_matrix.png")
-
     write_summary(
         args.output_dir / "baseline_summary.md",
         history_frame,
         metrics,
         report,
         matrix,
-        title="Improved 1D CNN Summary",
+        title="From-Scratch Improved CNN Summary",
         model_description=(
-            "An improved Keras 1D CNN was trained with class-weighted loss, Adam, "
-            "BatchNorm, GlobalAveragePooling, Dropout, and optional rare-class augmentation."
+            "A manual NumPy CNN was trained with explicit forward pass, backward pass, "
+            "weighted softmax cross-entropy, Adam/SGD updates, and rare-class augmentation."
         ),
-        next_step=(
-            "Compare macro F1 and minority-class recall against the previous CNN/MLP results, "
-            "then quantize the best model for ESP32 testing."
-        ),
+        next_step="Compare macro F1 and rare-class recall, then tune class-weight cap and augmentation strength.",
     )
-
     print(json.dumps(metrics, indent=2))
 
 
 def save_dataset_visualizations(dataset, args: argparse.Namespace) -> None:
-    visualization_dir = args.output_dir / "dataset_visualizations"
-    visualize_dataset(dataset, visualization_dir)
+    visualize_dataset(dataset, args.output_dir / "dataset_visualizations")
 
 
-def print_dataset_summary(dataset, args: argparse.Namespace, class_weights, augmentation_report: dict) -> None:
-    print("[train_cnn] Dataset summary:")
-    print(f"  train samples: {len(dataset.x_train)}")
+def print_dataset_summary(dataset, x_train, args, class_weights, augmentation_report) -> None:
+    print("[train_cnn] From-scratch CNN training")
+    print(f"  original train samples: {len(dataset.x_train)}")
+    print(f"  effective train samples: {len(x_train)}")
     print(f"  validation samples: {len(dataset.x_val)}")
     print(f"  test samples: {len(dataset.x_test)}")
     print(f"  input length: {dataset.input_length}")
     print(f"  num classes: {dataset.num_classes}")
-    print(f"  normalization: {args.normalize}")
-    print(f"  optimizer: Adam")
+    print(f"  optimizer: {args.optimizer}")
     print(f"  class weights: {class_weights}")
     print(f"  augmentation: {json.dumps(augmentation_report)}")
-
-
-def set_reproducible_seed(seed: int) -> None:
-    np.random.seed(seed)
-    tf.keras.utils.set_random_seed(seed)
 
 
 if __name__ == "__main__":
