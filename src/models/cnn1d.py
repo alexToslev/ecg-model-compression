@@ -5,7 +5,9 @@ from pathlib import Path
 import numpy as np
 
 
+# Manual 1D convolution layer.
 class Conv1D:
+    # Initializes layer parameters and caches.
     def __init__(
         self,
         in_channels: int,
@@ -32,6 +34,7 @@ class Conv1D:
         self._mb = np.zeros_like(self.bias)
         self._vb = np.zeros_like(self.bias)
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         if self.padding == "same":
             pad_left = (self.kernel_size - 1) // 2
@@ -52,6 +55,7 @@ class Conv1D:
 
         return np.einsum("nlkc,fck->nlf", patches, self.weights) + self.bias[None, None, :]
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         assert self.cache_padded is not None and self.cache_patches is not None
         out_length = grad_output.shape[1]
@@ -73,6 +77,7 @@ class Conv1D:
             return grad_input_padded[:, pad_left:-pad_right, :]
         return grad_input_padded
 
+    # Updates trainable weights.
     def update(self, learning_rate: float, optimizer: str = "sgd") -> None:
         if optimizer == "adam":
             self._adam_step += 1
@@ -84,26 +89,33 @@ class Conv1D:
         self.bias -= learning_rate * self.grad_bias
 
 
+# ReLU activation layer.
 class ReLU:
+    # Initializes layer parameters and caches.
     def __init__(self):
         self.cache_input: np.ndarray | None = None
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         if training:
             self.cache_input = x
         return np.maximum(x, 0.0)
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         assert self.cache_input is not None
         return grad_output * (self.cache_input > 0.0)
 
 
+# Max-pooling layer for short ECG windows.
 class MaxPool1D:
+    # Initializes layer parameters and caches.
     def __init__(self, pool_size: int = 2):
         self.pool_size = pool_size
         self.cache_input: np.ndarray | None = None
         self.cache_indices: np.ndarray | None = None
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         batch_size, length, channels = x.shape
         out_length = length // self.pool_size
@@ -122,6 +134,7 @@ class MaxPool1D:
             self.cache_indices = indices
         return output
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         assert self.cache_input is not None and self.cache_indices is not None
         batch_size, out_length, channels = grad_output.shape
@@ -136,21 +149,27 @@ class MaxPool1D:
         return grad_input
 
 
+# Averages each feature channel over time.
 class GlobalAveragePool1D:
+    # Initializes layer parameters and caches.
     def __init__(self):
         self.cache_length: int | None = None
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         if training:
             self.cache_length = x.shape[1]
         return x.mean(axis=1)
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         assert self.cache_length is not None
         return np.repeat(grad_output[:, None, :] / self.cache_length, self.cache_length, axis=1)
 
 
+# Fully connected layer.
 class Dense:
+    # Initializes layer parameters and caches.
     def __init__(self, in_features: int, out_features: int):
         self.in_features = in_features
         self.out_features = out_features
@@ -166,17 +185,20 @@ class Dense:
         self._mb = np.zeros_like(self.bias)
         self._vb = np.zeros_like(self.bias)
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         if training:
             self.cache_input = x
         return x @ self.weights + self.bias
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         assert self.cache_input is not None
         self.grad_weights = self.cache_input.T @ grad_output
         self.grad_bias = grad_output.sum(axis=0)
         return grad_output @ self.weights.T
 
+    # Updates trainable weights.
     def update(self, learning_rate: float, optimizer: str = "sgd") -> None:
         if optimizer == "adam":
             self._adam_step += 1
@@ -188,11 +210,14 @@ class Dense:
         self.bias -= learning_rate * self.grad_bias
 
 
+# Randomly drops hidden features during training.
 class Dropout:
+    # Initializes layer parameters and caches.
     def __init__(self, rate: float):
         self.rate = rate
         self.mask: np.ndarray | None = None
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         if not training or self.rate <= 0.0:
             return x
@@ -200,6 +225,7 @@ class Dropout:
         self.mask = (np.random.random(x.shape) < keep_probability).astype(np.float32) / keep_probability
         return x * self.mask
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
         if self.rate <= 0.0:
             return grad_output
@@ -207,13 +233,16 @@ class Dropout:
         return grad_output * self.mask
 
 
+# Weighted softmax loss for imbalanced classes.
 class SoftmaxCrossEntropy:
+    # Initializes layer parameters and caches.
     def __init__(self):
         self.probabilities: np.ndarray | None = None
         self.labels: np.ndarray | None = None
         self.sample_weights: np.ndarray | None = None
         self.weight_sum: float = 1.0
 
+    # Computes the forward pass.
     def forward(
         self,
         logits: np.ndarray,
@@ -235,6 +264,7 @@ class SoftmaxCrossEntropy:
         self.weight_sum = float(np.sum(sample_weights) + 1e-12)
         return float(np.sum(losses * sample_weights) / self.weight_sum)
 
+    # Computes gradients for backpropagation.
     def backward(self) -> np.ndarray:
         assert self.probabilities is not None and self.labels is not None and self.sample_weights is not None
         grad = self.probabilities.copy()
@@ -243,7 +273,9 @@ class SoftmaxCrossEntropy:
         return grad
 
 
+# Complete manual CNN model.
 class CNNFromScratch:
+    # Initializes layer parameters and caches.
     def __init__(self, input_length: int, num_classes: int, dropout_rate: float = 0.2):
         self.input_length = input_length
         self.num_classes = num_classes
@@ -267,6 +299,7 @@ class CNNFromScratch:
         self.output_layer = Dense(32, num_classes)
         self.loss = SoftmaxCrossEntropy()
 
+    # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
         x = self.conv1.forward(x, training=training)
         x = self.relu1.forward(x, training=training)
@@ -285,6 +318,7 @@ class CNNFromScratch:
         x = self.dropout.forward(x, training=training)
         return self.output_layer.forward(x, training=training)
 
+    # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> None:
         grad = self.output_layer.backward(grad_output)
         grad = self.dropout.backward(grad)
@@ -303,6 +337,7 @@ class CNNFromScratch:
         grad = self.relu1.backward(grad)
         self.conv1.backward(grad)
 
+    # Updates trainable weights.
     def update(self, learning_rate: float, optimizer: str = "sgd") -> None:
         self.conv1.update(learning_rate, optimizer)
         self.conv2.update(learning_rate, optimizer)
@@ -310,10 +345,12 @@ class CNNFromScratch:
         self.dense1.update(learning_rate, optimizer)
         self.output_layer.update(learning_rate, optimizer)
 
+    # Predicts class ids from logits.
     def predict(self, x: np.ndarray) -> np.ndarray:
         logits = self.forward(x, training=False)
         return np.argmax(logits, axis=1)
 
+    # Returns all trainable weights.
     def get_parameters(self) -> dict[str, np.ndarray]:
         return {
             "conv1.weights": self.conv1.weights,
@@ -328,6 +365,7 @@ class CNNFromScratch:
             "output_layer.bias": self.output_layer.bias,
         }
 
+    # Loads saved trainable weights.
     def set_parameters(self, params: dict[str, np.ndarray]) -> None:
         self.conv1.weights = params["conv1.weights"].astype(np.float32)
         self.conv1.bias = params["conv1.bias"].astype(np.float32)
@@ -340,9 +378,11 @@ class CNNFromScratch:
         self.output_layer.weights = params["output_layer.weights"].astype(np.float32)
         self.output_layer.bias = params["output_layer.bias"].astype(np.float32)
 
+    # Counts trainable parameters.
     def parameter_count(self) -> int:
         return int(sum(np.prod(value.shape) for value in self.get_parameters().values()))
 
+    # Exports trained NumPy weights to Keras.
     def save_keras_model(self, path: str | Path) -> None:
         try:
             import tensorflow as tf
@@ -372,6 +412,7 @@ class CNNFromScratch:
         keras_model.save(path)
 
 
+# Applies one Adam optimizer update.
 def adam_update(
     params: np.ndarray,
     grads: np.ndarray,
@@ -392,9 +433,11 @@ def adam_update(
     return params - learning_rate * first_unbiased / (np.sqrt(second_unbiased) + eps)
 
 
+# Builds the scratch CNN.
 def build_tiny_cnn(input_length: int, num_classes: int, dropout_rate: float = 0.2) -> CNNFromScratch:
     return CNNFromScratch(input_length=input_length, num_classes=num_classes, dropout_rate=dropout_rate)
 
 
+# Backward-compatible model builder.
 def build_improved_cnn(input_length: int, num_classes: int, dropout_rate: float = 0.2) -> CNNFromScratch:
     return build_tiny_cnn(input_length=input_length, num_classes=num_classes, dropout_rate=dropout_rate)

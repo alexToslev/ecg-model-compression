@@ -20,6 +20,7 @@ from src.evaluation.summarize_baseline import (
 from src.models.cnn1d import build_improved_cnn
 
 
+# Defines command-line arguments.
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Train a from-scratch 1D CNN with class weighting and rare-class augmentation."
@@ -44,6 +45,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+# Runs the full training workflow.
 def main() -> None:
     args = parse_args()
     np.random.seed(args.seed)
@@ -78,6 +80,7 @@ def main() -> None:
     save_artifacts(model, history, dataset, args, class_weights, augmentation_report, training_seconds)
 
 
+# Loads demo or real MIT-BIH data.
 def load_dataset(args: argparse.Namespace):
     if args.demo_data:
         return make_demo_dataset(validation_fraction=args.validation_fraction, seed=args.seed)
@@ -89,6 +92,7 @@ def load_dataset(args: argparse.Namespace):
     )
 
 
+# Trains the CNN batch by batch.
 def train_model(model, x_train, y_train, dataset, args, class_weights):
     history = {
         "train_loss": [],
@@ -130,6 +134,7 @@ def train_model(model, x_train, y_train, dataset, args, class_weights):
     return history
 
 
+# Computes loss and accuracy on a split.
 def evaluate_loss_accuracy(model, x, y, batch_size: int, class_weights=None) -> tuple[float, float]:
     total_loss = 0.0
     predictions = []
@@ -143,11 +148,13 @@ def evaluate_loss_accuracy(model, x, y, batch_size: int, class_weights=None) -> 
     return float(total_loss / len(x)), float(np.mean(y_pred == y))
 
 
+# Computes prediction accuracy.
 def accuracy(model, x, y, batch_size: int) -> float:
     predictions = predict_in_batches(model, x, batch_size)
     return float(np.mean(predictions == y))
 
 
+# Predicts labels in smaller batches.
 def predict_in_batches(model, x, batch_size: int) -> np.ndarray:
     predictions = []
     for start in range(0, len(x), batch_size):
@@ -156,6 +163,7 @@ def predict_in_batches(model, x, batch_size: int) -> np.ndarray:
     return np.concatenate(predictions)
 
 
+# Computes capped class-imbalance penalties.
 def calculate_class_weights(labels: np.ndarray, num_classes: int, weight_cap: float) -> dict[int, float]:
     counts = np.bincount(labels, minlength=num_classes).astype(np.float32)
     total = float(np.sum(counts))
@@ -164,6 +172,7 @@ def calculate_class_weights(labels: np.ndarray, num_classes: int, weight_cap: fl
     return {class_id: float(weights[class_id]) for class_id in range(num_classes)}
 
 
+# Applies optional rare-class augmentation.
 def prepare_training_data(dataset, args: argparse.Namespace) -> tuple[np.ndarray, np.ndarray, dict]:
     if not args.augment_rare_classes:
         return dataset.x_train, dataset.y_train, {"enabled": False}
@@ -178,6 +187,7 @@ def prepare_training_data(dataset, args: argparse.Namespace) -> tuple[np.ndarray
     )
 
 
+# Creates extra samples for rare classes.
 def augment_rare_classes(
     x_train: np.ndarray,
     y_train: np.ndarray,
@@ -232,6 +242,7 @@ def augment_rare_classes(
     )
 
 
+# Applies mild ECG-safe augmentation.
 def augment_one_sample(sample: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     augmented = sample.astype(np.float32).copy()
     augmented *= rng.uniform(0.95, 1.05)
@@ -248,6 +259,7 @@ def augment_one_sample(sample: np.ndarray, rng: np.random.Generator) -> np.ndarr
     return augmented.astype(np.float32)
 
 
+# Saves metrics, plots, weights, and reports.
 def save_artifacts(model, history, dataset, args, class_weights, augmentation_report, training_seconds: float) -> None:
     np.savez(args.output_dir / "tiny_ecg_cnn_weights.npz", **model.get_parameters())
 
@@ -337,10 +349,12 @@ def save_artifacts(model, history, dataset, args, class_weights, augmentation_re
     print(json.dumps(metrics, indent=2))
 
 
+# Saves dataset diagnostic plots.
 def save_dataset_visualizations(dataset, args: argparse.Namespace) -> None:
     visualize_dataset(dataset, args.output_dir / "dataset_visualizations")
 
 
+# Prints the experiment setup.
 def print_dataset_summary(dataset, x_train, args, class_weights, augmentation_report) -> None:
     print("[train_cnn] From-scratch CNN training")
     print(f"  original train samples: {len(dataset.x_train)}")
