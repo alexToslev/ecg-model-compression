@@ -13,7 +13,7 @@ from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert a trained ECG model to int8 TensorFlow Lite.")
+    parser = argparse.ArgumentParser(description="Convert a trained ECG model with full int8 post-training quantization.")
     parser.add_argument("--model", type=Path, default=Path("results/improved_cnn_scratch/tiny_ecg_cnn.keras"))
     parser.add_argument("--data-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--output", type=Path, default=Path("results/improved_cnn_scratch/tiny_ecg_cnn_int8.tflite"))
@@ -43,6 +43,7 @@ def main() -> None:
     metrics = evaluate_tflite(args.output, dataset.x_test, dataset.y_test)
     metrics["tflite_size_bytes"] = args.output.stat().st_size
     metrics["tflite_path"] = str(args.output)
+    metrics["quantization_mode"] = "full_int8_post_training_quantization"
     metrics["representative_samples"] = min(args.representative_samples, len(dataset.x_train))
     baseline_metrics = _load_baseline_metrics(args.model.parent)
     if baseline_metrics is not None:
@@ -85,15 +86,11 @@ def evaluate_tflite(model_path: Path, x_test: np.ndarray, y_test: np.ndarray) ->
     probabilities = []
     predictions = []
     for x, y in zip(x_test, y_test):
-        quantized_x = x / input_scale + input_zero_point
-        quantized_x = np.clip(quantized_x, -128, 127).astype(np.int8)
-        interpreter.set_tensor(input_details["index"], quantized_x[np.newaxis, ...])
+        model_input = quantize_input(x, input_details, input_scale, input_zero_point)
+        interpreter.set_tensor(input_details["index"], model_input[np.newaxis, ...])
         interpreter.invoke()
         output = interpreter.get_tensor(output_details["index"])
-        if output_scale:
-            output_float = (output.astype(np.float32) - output_zero_point) * output_scale
-        else:
-            output_float = output.astype(np.float32)
+        output_float = dequantize_output(output, output_scale, output_zero_point)
         prediction = int(output_float.argmax(axis=1)[0])
         correct += int(prediction == y)
         predictions.append(prediction)
@@ -110,7 +107,34 @@ def evaluate_tflite(model_path: Path, x_test: np.ndarray, y_test: np.ndarray) ->
     )
     np.savetxt(model_dir / "int8_confusion_matrix.csv", matrix, delimiter=",", fmt="%d")
 
-    return {"int8_accuracy": correct / len(y_test), "int8_loss": loss}
+    return {
+        "int8_accuracy": correct / len(y_test),
+        "int8_loss": loss,
+        "int8_macro_f1": float(report["macro avg"]["f1-score"]),
+        "int8_macro_precision": float(report["macro avg"]["precision"]),
+        "int8_macro_recall": float(report["macro avg"]["recall"]),
+    }
+
+
+def quantize_input(
+    x: np.ndarray,
+    input_details: dict,
+    input_scale: float,
+    input_zero_point: int,
+) -> np.ndarray:
+    dtype = input_details["dtype"]
+    if not input_scale:
+        raise ValueError("Quantized TFLite input is missing a valid scale.")
+
+    quantized_x = x / input_scale + input_zero_point
+    dtype_info = np.iinfo(dtype)
+    return np.clip(quantized_x, dtype_info.min, dtype_info.max).astype(dtype)
+
+
+def dequantize_output(output: np.ndarray, output_scale: float, output_zero_point: int) -> np.ndarray:
+    if not output_scale:
+        raise ValueError("Quantized TFLite output is missing a valid scale.")
+    return (output.astype(np.float32) - output_zero_point) * output_scale
 
 
 def sparse_cross_entropy_from_probabilities(probabilities: np.ndarray, labels: np.ndarray) -> float:
@@ -137,11 +161,14 @@ def write_quantization_report(metrics: dict, output_dir: Path) -> None:
     lines = [
         "# CNN Post-Training Quantization Summary",
         "",
-        "This report compares the improved CNN Keras model against a post-training int8 TensorFlow Lite model.",
+        "This report compares the improved CNN Keras model against a full int8 post-training TensorFlow Lite model.",
         "",
         "## Quantized model",
         "",
+        f"- Quantization mode: `{metrics['quantization_mode']}`",
         f"- Int8 accuracy: {metrics['int8_accuracy']:.4f}",
+        f"- Int8 macro F1: {metrics['int8_macro_f1']:.4f}",
+        f"- Int8 macro recall: {metrics['int8_macro_recall']:.4f}",
         f"- Int8 loss: {metrics['int8_loss']:.4f}",
         f"- TFLite size: {metrics['tflite_size_bytes']} bytes",
         f"- TFLite path: `{metrics['tflite_path']}`",
