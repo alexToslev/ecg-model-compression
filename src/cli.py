@@ -91,6 +91,16 @@ def parse_args() -> argparse.Namespace:
     summarize_parser.add_argument("--run-dir", type=str, default="results/improved_cnn_scratch")
     summarize_parser.add_argument("--quantized-dir", type=str, default=None)
 
+    final_compare_parser = subparsers.add_parser(
+        "final-compare",
+        help="Create final cap-4 quantized plots and baseline-vs-INT8 comparison plots",
+    )
+    final_compare_parser.add_argument("--baseline-dir", type=str, default="results/class_weight_sweep_correct_data/cap_4")
+    final_compare_parser.add_argument("--int8-dir", type=str, default="results/final_candidate_cap_4")
+    final_compare_parser.add_argument("--output-dir", type=str, default="results/final_cap4_comparison")
+    final_compare_parser.add_argument("--esp32-latency-ms", type=float, default=52.0)
+    final_compare_parser.add_argument("--tensor-arena-kib", type=float, default=80.0)
+
     return parser.parse_args()
 
 
@@ -157,6 +167,10 @@ def main() -> None:
         from src.evaluation.summarize_baseline import main as summarize_main
 
         summarize_main()
+    elif args.command == "final-compare":
+        from src.evaluation.final_quantized_comparison import main as final_compare_main
+
+        final_compare_main()
 
 
 if __name__ == "__main__":
