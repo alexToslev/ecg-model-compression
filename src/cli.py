@@ -71,6 +71,22 @@ def parse_args() -> argparse.Namespace:
     tinyml_parser.add_argument("--flash-budget-bytes", type=int, default=4 * 1024 * 1024)
     tinyml_parser.add_argument("--sram-budget-bytes", type=int, default=320 * 1024)
 
+    samples_parser = subparsers.add_parser(
+        "export-ecg-samples",
+        help="Export real MIT-BIH test beats for ESP32 int8 inference",
+    )
+    samples_parser.add_argument("--csv", type=str, default="data/processed/mitbih_test.csv")
+    samples_parser.add_argument("--output-dir", type=str, default="results/esp32_final_cap_4")
+    samples_parser.add_argument("--report", type=str, default="results/esp32_final_cap_4/esp32_deployment_report.json")
+    samples_parser.add_argument("--model", type=str, default="results/final_candidate_cap_4/tiny_ecg_cnn_int8.tflite")
+    samples_parser.add_argument("--samples-per-class", type=int, default=1)
+    samples_parser.add_argument("--prefer-correct", action="store_true")
+    samples_parser.add_argument("--input-scale", type=float, default=None)
+    samples_parser.add_argument("--input-zero-point", type=int, default=None)
+    samples_parser.add_argument("--model-header", type=str, default="model.h")
+    samples_parser.add_argument("--sample-header", type=str, default="ecg_samples.h")
+    samples_parser.add_argument("--model-array-name", type=str, default="g_model")
+
     summarize_parser = subparsers.add_parser("summarize", help="Generate evaluation plots and a markdown summary")
     summarize_parser.add_argument("--run-dir", type=str, default="results/improved_cnn_scratch")
     summarize_parser.add_argument("--quantized-dir", type=str, default=None)
@@ -133,6 +149,10 @@ def main() -> None:
         from src.export_tinyml import main as export_tinyml_main
 
         export_tinyml_main()
+    elif args.command == "export-ecg-samples":
+        from src.export_ecg_samples import main as export_ecg_samples_main
+
+        export_ecg_samples_main()
     elif args.command == "summarize":
         from src.evaluation.summarize_baseline import main as summarize_main
 
