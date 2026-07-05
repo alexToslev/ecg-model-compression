@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     train_parser.add_argument("--demo-data", action="store_true")
     train_parser.add_argument("--class-weights", choices=["balanced", "none"], default="balanced")
     train_parser.add_argument("--class-weight-cap", type=float, default=10.0)
+    train_parser.add_argument("--sampling-strategy", choices=["shuffle", "weighted", "balanced"], default="shuffle")
     train_parser.add_argument("--augment-rare-classes", dest="augment_rare_classes", action="store_true", default=True)
     train_parser.add_argument("--no-augment-rare-classes", dest="augment_rare_classes", action="store_false")
     train_parser.add_argument("--rare-target-count", type=int, default=2000)

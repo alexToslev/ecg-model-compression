@@ -73,6 +73,27 @@ python -m src train \
   --rare-target-count 2000
 ```
 
+To test sampling instead of relying only on strong class weights:
+
+```bash
+python -m src train \
+  --data-dir data/processed \
+  --output-dir results/sampling_experiments/balanced_cap_5 \
+  --epochs 20 \
+  --batch-size 128 \
+  --class-weights balanced \
+  --class-weight-cap 5 \
+  --sampling-strategy balanced \
+  --augment-rare-classes \
+  --rare-target-count 2000
+```
+
+Available sampling strategies:
+
+- `shuffle`: normal shuffled batches using the natural class distribution.
+- `weighted`: samples examples with inverse-frequency probabilities.
+- `balanced`: builds mini-batches with approximately equal class counts.
+
 For a smoke test:
 
 ```bash

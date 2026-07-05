@@ -39,6 +39,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-train-samples", type=int, default=None)
     parser.add_argument("--class-weights", choices=["balanced", "none"], default="balanced")
     parser.add_argument("--class-weight-cap", type=float, default=10.0)
+    parser.add_argument(
+        "--sampling-strategy",
+        choices=["shuffle", "weighted", "balanced"],
+        default="shuffle",
+        help=(
+            "How to build each training epoch. 'shuffle' keeps the natural class distribution, "
+            "'weighted' samples examples by inverse class frequency, and 'balanced' builds "
+            "mini-batches with similar counts per class."
+        ),
+    )
     parser.add_argument("--augment-rare-classes", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--rare-target-count", type=int, default=2000)
     parser.add_argument("--rare-threshold", type=float, default=0.2)
@@ -100,9 +110,16 @@ def train_model(model, x_train, y_train, dataset, args, class_weights):
         "val_loss": [],
         "val_accuracy": [],
     }
+    rng = np.random.default_rng(args.seed)
 
     for epoch in range(1, args.epochs + 1):
-        order = np.random.permutation(len(x_train))
+        order = make_epoch_indices(
+            labels=y_train,
+            num_classes=dataset.num_classes,
+            batch_size=args.batch_size,
+            strategy=args.sampling_strategy,
+            rng=rng,
+        )
         x_epoch = x_train[order]
         y_epoch = y_train[order]
         epoch_loss = 0.0
@@ -132,6 +149,72 @@ def train_model(model, x_train, y_train, dataset, args, class_weights):
         )
 
     return history
+
+
+# Builds the sample order for one training epoch.
+def make_epoch_indices(
+    labels: np.ndarray,
+    num_classes: int,
+    batch_size: int,
+    strategy: str,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    if strategy == "shuffle":
+        return rng.permutation(len(labels))
+    if strategy == "weighted":
+        return make_weighted_epoch_indices(labels, num_classes, rng)
+    if strategy == "balanced":
+        return make_balanced_epoch_indices(labels, num_classes, batch_size, rng)
+    raise ValueError(f"Unknown sampling strategy: {strategy}")
+
+
+# Samples examples with inverse-frequency probabilities.
+def make_weighted_epoch_indices(
+    labels: np.ndarray,
+    num_classes: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    counts = np.bincount(labels, minlength=num_classes).astype(np.float64)
+    class_probabilities = 1.0 / np.maximum(counts, 1.0)
+    sample_probabilities = class_probabilities[labels]
+    sample_probabilities /= np.sum(sample_probabilities)
+    return rng.choice(len(labels), size=len(labels), replace=True, p=sample_probabilities)
+
+
+# Builds batches with approximately equal class counts.
+def make_balanced_epoch_indices(
+    labels: np.ndarray,
+    num_classes: int,
+    batch_size: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    class_indices = [np.flatnonzero(labels == class_id) for class_id in range(num_classes)]
+    present_classes = [class_id for class_id, indices in enumerate(class_indices) if len(indices) > 0]
+    if not present_classes:
+        raise ValueError("Cannot build balanced batches without any labeled samples.")
+
+    num_batches = int(np.ceil(len(labels) / batch_size))
+    base_count = batch_size // len(present_classes)
+    extra_count = batch_size % len(present_classes)
+    epoch_indices = []
+
+    for batch_id in range(num_batches):
+        batch_indices = []
+        rotated_classes = present_classes[batch_id % len(present_classes) :] + present_classes[: batch_id % len(present_classes)]
+
+        for position, class_id in enumerate(rotated_classes):
+            samples_for_class = base_count + int(position < extra_count)
+            if samples_for_class == 0:
+                continue
+            indices = class_indices[class_id]
+            replace = len(indices) < samples_for_class
+            batch_indices.append(rng.choice(indices, size=samples_for_class, replace=replace))
+
+        batch = np.concatenate(batch_indices)
+        rng.shuffle(batch)
+        epoch_indices.append(batch)
+
+    return np.concatenate(epoch_indices)[: len(labels)]
 
 
 # Computes loss and accuracy on a split.
@@ -315,6 +398,7 @@ def save_artifacts(model, history, dataset, args, class_weights, augmentation_re
         "seed": args.seed,
         "class_weights": None if class_weights is None else {str(k): v for k, v in class_weights.items()},
         "class_weight_cap": args.class_weight_cap,
+        "sampling_strategy": args.sampling_strategy,
         "augmentation": augmentation_report,
         "parameters": model.parameter_count(),
         "training_seconds": float(training_seconds),
@@ -364,6 +448,7 @@ def print_dataset_summary(dataset, x_train, args, class_weights, augmentation_re
     print(f"  input length: {dataset.input_length}")
     print(f"  num classes: {dataset.num_classes}")
     print(f"  optimizer: {args.optimizer}")
+    print(f"  sampling strategy: {args.sampling_strategy}")
     print(f"  class weights: {class_weights}")
     print(f"  augmentation: {json.dumps(augmentation_report)}")
 
