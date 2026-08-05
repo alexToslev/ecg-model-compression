@@ -1,0 +1,64 @@
+{
+  "input_length": 187,
+  "num_classes": 5,
+  "splits": {
+    "train": {
+      "samples": 74420,
+      "shape": [
+        74420,
+        187,
+        1
+      ],
+      "class_counts": {
+        "0": 61600,
+        "1": 1889,
+        "2": 4920,
+        "3": 545,
+        "4": 5466
+      },
+      "signal_mean": 0.17421647906303406,
+      "signal_std": 0.22626154124736786,
+      "signal_min": 0.0,
+      "signal_max": 1.0
+    },
+    "validation": {
+      "samples": 13134,
+      "shape": [
+        13134,
+        187,
+        1
+      ],
+      "class_counts": {
+        "0": 10871,
+        "1": 334,
+        "2": 868,
+        "3": 96,
+        "4": 965
+      },
+      "signal_mean": 0.1746596246957779,
+      "signal_std": 0.22669973969459534,
+      "signal_min": 0.0,
+      "signal_max": 1.0
+    },
+    "test": {
+      "samples": 21892,
+      "shape": [
+        21892,
+        187,
+        1
+      ],
+      "class_counts": {
+        "0": 18118,
+        "1": 556,
+        "2": 1448,
+        "3": 162,
+        "4": 1608
+      },
+      "signal_mean": 0.17347915470600128,
+      "signal_std": 0.2255525290966034,
+      "signal_min": 0.0,
+      "signal_max": 1.0
+    }
+  },
+  "total_samples": 109446
+}

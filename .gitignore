@@ -185,7 +185,6 @@ cython_debug/
 data/raw/
 data/processed/
 mit-bih-arrhythmia-database-*/
-results/
 Project_Proposal_AP.pdf
 *.keras
 *.tflite

@@ -1,0 +1,73 @@
+{
+  "test_loss": 1.5578636248906454,
+  "test_accuracy": 0.2,
+  "macro_f1": 0.06666666666666667,
+  "weighted_f1": 0.06666666666666667,
+  "num_classes": 5,
+  "input_length": 187,
+  "architecture": "from_scratch_weighted_augmented_1d_cnn",
+  "layers": [
+    "Conv1D(16,k=7)",
+    "ReLU",
+    "MaxPool1D",
+    "Conv1D(32,k=5)",
+    "ReLU",
+    "MaxPool1D",
+    "Conv1D(64,k=3)",
+    "ReLU",
+    "GlobalAveragePool1D",
+    "Dense(32)",
+    "ReLU",
+    "Dropout",
+    "Dense(5)",
+    "WeightedSoftmaxCrossEntropy"
+  ],
+  "epochs": 1,
+  "batch_size": 32,
+  "learning_rate": 0.001,
+  "optimizer": "adam",
+  "dropout_rate": 0.2,
+  "validation_fraction": 0.15,
+  "normalize": "none",
+  "seed": 42,
+  "class_weights": {
+    "0": 1.0074074268341064,
+    "1": 0.995121955871582,
+    "2": 0.995121955871582,
+    "3": 1.0074074268341064,
+    "4": 0.995121955871582
+  },
+  "class_weight_cap": 5.0,
+  "augmentation": {
+    "enabled": true,
+    "rare_threshold": 0.2,
+    "rare_limit": 16,
+    "target_count": 100,
+    "original_counts": {
+      "0": 81,
+      "1": 82,
+      "2": 82,
+      "3": 81,
+      "4": 82
+    },
+    "generated_per_class": {
+      "0": 0,
+      "1": 0,
+      "2": 0,
+      "3": 0,
+      "4": 0
+    },
+    "final_counts": {
+      "0": 81,
+      "1": 82,
+      "2": 82,
+      "3": 81,
+      "4": 82
+    }
+  },
+  "parameters": 11173,
+  "training_seconds": 1.574434400012251,
+  "weights_path": "results\\smoke_scratch_cnn\\tiny_ecg_cnn_weights.npz",
+  "keras_model_path": "results\\smoke_scratch_cnn\\tiny_ecg_cnn.keras",
+  "keras_model_size_bytes": 90416
+}

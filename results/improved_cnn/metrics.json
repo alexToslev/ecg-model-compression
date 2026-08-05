@@ -1,0 +1,72 @@
+{
+  "test_loss": 0.28749459981918335,
+  "test_accuracy": 0.9090992212295532,
+  "macro_f1": 0.7326580919875487,
+  "weighted_f1": 0.9255369778874946,
+  "num_classes": 5,
+  "input_length": 187,
+  "architecture": "improved_keras_1d_cnn",
+  "layers": [
+    "Conv1D(16,k=7)",
+    "BatchNorm",
+    "ReLU",
+    "MaxPool1D",
+    "Conv1D(32,k=5)",
+    "BatchNorm",
+    "ReLU",
+    "MaxPool1D",
+    "Conv1D(64,k=3)",
+    "BatchNorm",
+    "ReLU",
+    "GlobalAveragePooling1D",
+    "Dense(32)",
+    "Dropout",
+    "Dense(5,softmax)"
+  ],
+  "epochs_requested": 30,
+  "epochs_completed": 30,
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "optimizer": "Adam",
+  "dropout_rate": 0.2,
+  "validation_fraction": 0.15,
+  "normalize": "none",
+  "seed": 42,
+  "class_weights": {
+    "0": 0.24162337183952332,
+    "1": 7.879301071166992,
+    "2": 3.025203227996826,
+    "3": 27.310091018676758,
+    "4": 2.723015069961548
+  },
+  "augmentation": {
+    "enabled": true,
+    "rare_threshold": 0.2,
+    "rare_limit": 12320,
+    "target_count": 2000,
+    "original_counts": {
+      "0": 61600,
+      "1": 1889,
+      "2": 4920,
+      "3": 545,
+      "4": 5466
+    },
+    "generated_per_class": {
+      "0": 0,
+      "1": 111,
+      "2": 0,
+      "3": 1455,
+      "4": 0
+    },
+    "final_counts": {
+      "0": 61600,
+      "1": 2000,
+      "2": 4920,
+      "3": 2000,
+      "4": 5466
+    }
+  },
+  "parameters": 11509,
+  "keras_model_path": "results\\improved_cnn\\tiny_ecg_cnn.keras",
+  "keras_model_size_bytes": 207780
+}

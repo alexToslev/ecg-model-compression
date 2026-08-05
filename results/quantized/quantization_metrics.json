@@ -1,0 +1,23 @@
+{
+  "float32_model_path": "results\\baseline_cnn\\tiny_ecg_cnn.keras",
+  "int8_tflite_path": "results\\quantized\\tiny_ecg_cnn_int8.tflite",
+  "input_length": 187,
+  "num_classes": 5,
+  "parameters": 2437,
+  "float32_accuracy": 0.9353645443916321,
+  "float32_loss": 0.22547666728496552,
+  "int8_accuracy": 0.9342225470491504,
+  "accuracy_drop": 0.0011419973424816598,
+  "keras_size_bytes": 69963,
+  "tflite_size_bytes": 11928,
+  "size_reduction_factor": 5.865442655935614,
+  "representative_samples": 200,
+  "quantization": {
+    "input_dtype": "<class 'numpy.int8'>",
+    "input_scale": 0.003921568859368563,
+    "input_zero_point": -128,
+    "output_dtype": "<class 'numpy.int8'>",
+    "output_scale": 0.00390625,
+    "output_zero_point": -128
+  }
+}

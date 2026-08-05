@@ -1,0 +1,12 @@
+{
+  "test_accuracy": 0.828019367805591,
+  "input_length": 187,
+  "num_classes": 5,
+  "parameters": 173,
+  "epochs": 20,
+  "batch_size": 64,
+  "learning_rate": 0.01,
+  "max_train_samples": 0,
+  "training_seconds": 392.9329174000013,
+  "implementation": "NumPy manual Conv1D/ReLU/MaxPool/Dense/SoftmaxCE/SGD"
+}

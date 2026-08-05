@@ -1,0 +1,3 @@
+model,accuracy,size_bytes
+float32_keras,0.9353645443916321,69963
+int8_tflite,0.9342225470491504,11928
