@@ -1,0 +1,74 @@
+{
+  "test_loss": 1.8430887740300232,
+  "test_accuracy": 0.1748583957610086,
+  "macro_f1": 0.3155103122348222,
+  "weighted_f1": 0.11648688966818238,
+  "num_classes": 5,
+  "input_length": 187,
+  "architecture": "from_scratch_weighted_augmented_1d_cnn",
+  "layers": [
+    "Conv1D(16,k=7)",
+    "ReLU",
+    "MaxPool1D",
+    "Conv1D(32,k=5)",
+    "ReLU",
+    "MaxPool1D",
+    "Conv1D(64,k=3)",
+    "ReLU",
+    "GlobalAveragePool1D",
+    "Dense(32)",
+    "ReLU",
+    "Dropout",
+    "Dense(5)",
+    "WeightedSoftmaxCrossEntropy"
+  ],
+  "epochs": 20,
+  "batch_size": 128,
+  "learning_rate": 0.001,
+  "optimizer": "adam",
+  "dropout_rate": 0.2,
+  "validation_fraction": 0.15,
+  "normalize": "none",
+  "seed": 42,
+  "class_weights": {
+    "0": 0.24162337183952332,
+    "1": 4.0,
+    "2": 3.025203227996826,
+    "3": 4.0,
+    "4": 2.723015069961548
+  },
+  "class_weight_cap": 4.0,
+  "sampling_strategy": "balanced",
+  "augmentation": {
+    "enabled": true,
+    "rare_threshold": 0.2,
+    "rare_limit": 12320,
+    "target_count": 2000,
+    "original_counts": {
+      "0": 61600,
+      "1": 1889,
+      "2": 4920,
+      "3": 545,
+      "4": 5466
+    },
+    "generated_per_class": {
+      "0": 0,
+      "1": 111,
+      "2": 0,
+      "3": 1455,
+      "4": 0
+    },
+    "final_counts": {
+      "0": 61600,
+      "1": 2000,
+      "2": 4920,
+      "3": 2000,
+      "4": 5466
+    }
+  },
+  "parameters": 11173,
+  "training_seconds": 4536.162136633,
+  "weights_path": "results/sampling_sweep_cap_4/balanced/tiny_ecg_cnn_weights.npz",
+  "keras_model_path": "results/sampling_sweep_cap_4/balanced/tiny_ecg_cnn.keras",
+  "keras_model_size_bytes": 90361
+}
