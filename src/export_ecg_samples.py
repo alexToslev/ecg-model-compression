@@ -18,6 +18,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--report", type=Path, default=Path("results/esp32_final_cap_4/esp32_deployment_report.json"))
     parser.add_argument("--model", type=Path, default=Path("results/final_candidate_cap_4/tiny_ecg_cnn_int8.tflite"))
     parser.add_argument("--samples-per-class", type=int, default=1)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed used for reproducible per-class sample selection.",
+    )
     parser.add_argument("--prefer-correct", action="store_true")
     parser.add_argument("--input-scale", type=float, default=None)
     parser.add_argument("--input-zero-point", type=int, default=None)
@@ -36,6 +42,7 @@ def main() -> None:
     features, labels, row_indices = select_samples(
         csv_path=args.csv,
         samples_per_class=args.samples_per_class,
+        seed=args.seed,
         prefer_correct=args.prefer_correct,
         model_path=args.model,
         input_scale=input_scale,
@@ -72,6 +79,7 @@ def main() -> None:
                 "labels": labels.tolist(),
                 "csv_row_indices": row_indices.tolist(),
                 "prefer_correct": args.prefer_correct,
+                "seed": args.seed,
                 "input_scale": input_scale,
                 "input_zero_point": input_zero_point,
             },
@@ -106,6 +114,7 @@ def resolve_input_quantization(args: argparse.Namespace) -> tuple[float, int]:
 def select_samples(
     csv_path: Path,
     samples_per_class: int,
+    seed: int,
     prefer_correct: bool,
     model_path: Path,
     input_scale: float,
@@ -122,6 +131,7 @@ def select_samples(
     features = values[:, :-1]
     labels = values[:, -1].astype(np.int32)
     selected_indices: list[int] = []
+    rng = np.random.default_rng(seed)
     predicted_labels = load_tflite_predictions(model_path, features, input_scale, input_zero_point) if prefer_correct else None
     for label in sorted(np.unique(labels)):
         label_indices = np.flatnonzero(labels == label)
@@ -131,7 +141,9 @@ def select_samples(
             label_indices = label_indices[predicted_labels[label_indices] == label]
             if label_indices.size < samples_per_class:
                 raise ValueError(f"Class {label} only has {label_indices.size} correctly predicted rows")
-        selected_indices.extend(label_indices[:samples_per_class].tolist())
+        selected_indices.extend(
+            rng.choice(label_indices, size=samples_per_class, replace=False).tolist()
+        )
 
     rows = np.asarray(selected_indices, dtype=np.int32)
     return features[rows], labels[rows], rows

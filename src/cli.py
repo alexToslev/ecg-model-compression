@@ -80,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     samples_parser.add_argument("--report", type=str, default="results/esp32_final_cap_4/esp32_deployment_report.json")
     samples_parser.add_argument("--model", type=str, default="results/final_candidate_cap_4/tiny_ecg_cnn_int8.tflite")
     samples_parser.add_argument("--samples-per-class", type=int, default=1)
+    samples_parser.add_argument("--seed", type=int, default=42)
     samples_parser.add_argument("--prefer-correct", action="store_true")
     samples_parser.add_argument("--input-scale", type=float, default=None)
     samples_parser.add_argument("--input-zero-point", type=int, default=None)

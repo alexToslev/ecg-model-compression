@@ -1,0 +1,286 @@
+ECG classifier ready
+model size: 23576 bytes
+test samples: 25 (5 per class, seed 42)
+tensor arena: 81920 bytes
+Sample 0, CSV row 14020, true class 0
+ECG class outputs:
+class 0: q=121, score=0.972656
+class 1: q=-123, score=0.019531
+class 2: q=-127, score=0.003906
+class 3: q=-127, score=0.003906
+class 4: q=-128, score=0.000000
+predicted class: 0
+correct: yes
+inference time: 52659 us
+----
+Sample 1, CSV row 7951, true class 0
+ECG class outputs:
+class 0: q=54, score=0.710938
+class 1: q=-98, score=0.117188
+class 2: q=-113, score=0.058594
+class 3: q=-128, score=0.000000
+class 4: q=-98, score=0.117188
+predicted class: 0
+correct: yes
+inference time: 52062 us
+----
+Sample 2, CSV row 11858, true class 0
+ECG class outputs:
+class 0: q=108, score=0.921875
+class 1: q=-113, score=0.058594
+class 2: q=-124, score=0.015625
+class 3: q=-128, score=0.000000
+class 4: q=-127, score=0.003906
+predicted class: 0
+correct: yes
+inference time: 52139 us
+----
+Sample 3, CSV row 1616, true class 0
+ECG class outputs:
+class 0: q=29, score=0.613281
+class 1: q=-81, score=0.183594
+class 2: q=-112, score=0.062500
+class 3: q=-95, score=0.128906
+class 4: q=-125, score=0.011719
+predicted class: 0
+correct: yes
+inference time: 52036 us
+----
+Sample 4, CSV row 7845, true class 0
+ECG class outputs:
+class 0: q=98, score=0.882812
+class 1: q=-121, score=0.027344
+class 2: q=-120, score=0.031250
+class 3: q=-121, score=0.027344
+class 4: q=-119, score=0.035156
+predicted class: 0
+correct: yes
+inference time: 52030 us
+----
+Sample 5, CSV row 18658, true class 1
+ECG class outputs:
+class 0: q=-118, score=0.039062
+class 1: q=118, score=0.960938
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=-128, score=0.000000
+predicted class: 1
+correct: yes
+inference time: 52104 us
+----
+Sample 6, CSV row 18169, true class 1
+ECG class outputs:
+class 0: q=119, score=0.964844
+class 1: q=-121, score=0.027344
+class 2: q=-128, score=0.000000
+class 3: q=-126, score=0.007812
+class 4: q=-128, score=0.000000
+predicted class: 0
+correct: no
+inference time: 52110 us
+----
+Sample 7, CSV row 18409, true class 1
+ECG class outputs:
+class 0: q=-102, score=0.101562
+class 1: q=101, score=0.894531
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=-128, score=0.000000
+predicted class: 1
+correct: yes
+inference time: 52128 us
+----
+Sample 8, CSV row 18541, true class 1
+ECG class outputs:
+class 0: q=-113, score=0.058594
+class 1: q=113, score=0.941406
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=-128, score=0.000000
+predicted class: 1
+correct: yes
+inference time: 52119 us
+----
+Sample 9, CSV row 18526, true class 1
+ECG class outputs:
+class 0: q=-124, score=0.015625
+class 1: q=121, score=0.972656
+class 2: q=-128, score=0.000000
+class 3: q=-125, score=0.011719
+class 4: q=-128, score=0.000000
+predicted class: 1
+correct: yes
+inference time: 52044 us
+----
+Sample 10, CSV row 19397, true class 2
+ECG class outputs:
+class 0: q=-128, score=0.000000
+class 1: q=-128, score=0.000000
+class 2: q=127, score=0.996094
+class 3: q=-128, score=0.000000
+class 4: q=-128, score=0.000000
+predicted class: 2
+correct: yes
+inference time: 52051 us
+----
+Sample 11, CSV row 19886, true class 2
+ECG class outputs:
+class 0: q=-118, score=0.039062
+class 1: q=-121, score=0.027344
+class 2: q=107, score=0.917969
+class 3: q=-125, score=0.011719
+class 4: q=-127, score=0.003906
+predicted class: 2
+correct: yes
+inference time: 52038 us
+----
+Sample 12, CSV row 19324, true class 2
+ECG class outputs:
+class 0: q=-128, score=0.000000
+class 1: q=-128, score=0.000000
+class 2: q=127, score=0.996094
+class 3: q=-128, score=0.000000
+class 4: q=-128, score=0.000000
+predicted class: 2
+correct: yes
+inference time: 52117 us
+----
+Sample 13, CSV row 19210, true class 2
+ECG class outputs:
+class 0: q=-125, score=0.011719
+class 1: q=-125, score=0.011719
+class 2: q=117, score=0.957031
+class 3: q=-123, score=0.019531
+class 4: q=-128, score=0.000000
+predicted class: 2
+correct: yes
+inference time: 52025 us
+----
+Sample 14, CSV row 18938, true class 2
+ECG class outputs:
+class 0: q=-127, score=0.003906
+class 1: q=-125, score=0.011719
+class 2: q=91, score=0.855469
+class 3: q=-126, score=0.007812
+class 4: q=-96, score=0.125000
+predicted class: 2
+correct: yes
+inference time: 52037 us
+----
+Sample 15, CSV row 20208, true class 3
+ECG class outputs:
+class 0: q=-7, score=0.472656
+class 1: q=-103, score=0.097656
+class 2: q=-127, score=0.003906
+class 3: q=-20, score=0.421875
+class 4: q=-127, score=0.003906
+predicted class: 0
+correct: no
+inference time: 52107 us
+----
+Sample 16, CSV row 20158, true class 3
+ECG class outputs:
+class 0: q=-6, score=0.476562
+class 1: q=-119, score=0.035156
+class 2: q=-125, score=0.011719
+class 3: q=-6, score=0.476562
+class 4: q=-127, score=0.003906
+predicted class: 0
+correct: no
+inference time: 52015 us
+----
+Sample 17, CSV row 20194, true class 3
+ECG class outputs:
+class 0: q=-125, score=0.011719
+class 1: q=-127, score=0.003906
+class 2: q=-119, score=0.035156
+class 3: q=115, score=0.949219
+class 4: q=-128, score=0.000000
+predicted class: 3
+correct: yes
+inference time: 52108 us
+----
+Sample 18, CSV row 20192, true class 3
+ECG class outputs:
+class 0: q=-124, score=0.015625
+class 1: q=-128, score=0.000000
+class 2: q=-128, score=0.000000
+class 3: q=124, score=0.984375
+class 4: q=-128, score=0.000000
+predicted class: 3
+correct: yes
+inference time: 52040 us
+----
+Sample 19, CSV row 20251, true class 3
+ECG class outputs:
+class 0: q=-115, score=0.050781
+class 1: q=-127, score=0.003906
+class 2: q=-126, score=0.007812
+class 3: q=112, score=0.937500
+class 4: q=-128, score=0.000000
+predicted class: 3
+correct: yes
+inference time: 52026 us
+----
+Sample 20, CSV row 20549, true class 4
+ECG class outputs:
+class 0: q=-128, score=0.000000
+class 1: q=-128, score=0.000000
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=127, score=0.996094
+predicted class: 4
+correct: yes
+inference time: 52119 us
+----
+Sample 21, CSV row 21660, true class 4
+ECG class outputs:
+class 0: q=40, score=0.656250
+class 1: q=-97, score=0.121094
+class 2: q=-127, score=0.003906
+class 3: q=-77, score=0.199219
+class 4: q=-123, score=0.019531
+predicted class: 0
+correct: no
+inference time: 52035 us
+----
+Sample 22, CSV row 21612, true class 4
+ECG class outputs:
+class 0: q=-128, score=0.000000
+class 1: q=-128, score=0.000000
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=127, score=0.996094
+predicted class: 4
+correct: yes
+inference time: 52038 us
+----
+Sample 23, CSV row 20728, true class 4
+ECG class outputs:
+class 0: q=-128, score=0.000000
+class 1: q=-128, score=0.000000
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=127, score=0.996094
+predicted class: 4
+correct: yes
+inference time: 52038 us
+----
+Sample 24, CSV row 21299, true class 4
+ECG class outputs:
+class 0: q=-128, score=0.000000
+class 1: q=-128, score=0.000000
+class 2: q=-128, score=0.000000
+class 3: q=-128, score=0.000000
+class 4: q=127, score=0.996094
+predicted class: 4
+correct: yes
+inference time: 52036 us
+----
+=== Hardware test complete ===
+correct: 21/25
+accuracy: 84.00%
+latency mean: 52.090 ms
+latency min: 52.015 ms
+latency max: 52.659 ms
+==============================
