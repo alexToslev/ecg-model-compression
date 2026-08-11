@@ -6,8 +6,8 @@ Compressed 1D CNN ECG Classification with Pruning, Quantization, and Evaluation
 
 ## Team members
 
-- Student 1: [Your Name]
-- Student 2: [Colleague Name]
+Aleksandar Toslev
+Luka Zotovikj
 
 ## Project overview
 
