@@ -228,3 +228,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local rendering, inspection, and Office lock files
+output/
+outputs/
+tmp/
+*.inspect.ndjson
+*.layout.json
+~$*.pptx
