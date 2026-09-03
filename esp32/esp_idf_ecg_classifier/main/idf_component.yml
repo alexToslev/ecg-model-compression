@@ -1,3 +1,4 @@
+# TensorFlow Lite Micro component version used for the ESP32 deployment build.
 dependencies:
   espressif/esp-tflite-micro:
     version: "1.3.7"

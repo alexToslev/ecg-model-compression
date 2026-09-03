@@ -1,3 +1,5 @@
+"""Evaluate a saved Keras ECG classifier on the MIT-BIH test split."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,6 +13,7 @@ from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 
 
 def parse_args() -> argparse.Namespace:
+    """Collect the model path, dataset location, and normalization mode."""
     parser = argparse.ArgumentParser(description="Evaluate a trained Keras ECG model.")
     parser.add_argument("--model", type=Path, default=Path("results/improved_cnn_scratch/tiny_ecg_cnn.keras"))
     parser.add_argument("--data-dir", type=Path, default=Path("data/processed"))
@@ -20,9 +23,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Load the model, run test-set inference, and print standard metrics."""
     args = parse_args()
     dataset = make_demo_dataset() if args.demo_data else load_mitbih_csv(args.data_dir, normalize=args.normalize)
     model = tf.keras.models.load_model(args.model)
+    # Recompile after loading so evaluation works even when optimizer state was
+    # not preserved with the saved model artifact.
     model.compile(
         optimizer="adam",
         loss="sparse_categorical_crossentropy",

@@ -1,3 +1,4 @@
+# Resolved ESP-IDF component versions for the reproducible ESP32 build.
 dependencies:
   espressif/esp-nn:
     component_hash: d341d40c8a135158f2bd47bd3c956bb8eda43358cd555cd887b410310a14c547

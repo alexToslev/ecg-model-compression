@@ -1,3 +1,4 @@
+# Default ESP32 build settings used for the final ECG classifier firmware.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
@@ -8,6 +9,7 @@ CONFIG_ESP_INT_WDT=n
 CONFIG_ESP_TASK_WDT_INIT=n
 
 CONFIG_PARTITION_TABLE_OFFSET=0xc000
+# Use the project partition CSV so the firmware has enough app space for TFLite Micro.
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"

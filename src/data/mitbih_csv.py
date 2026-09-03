@@ -1,3 +1,5 @@
+"""Load, validate, split, and normalize MIT-BIH heartbeat CSV data."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +12,8 @@ from sklearn.model_selection import train_test_split
 
 @dataclass(frozen=True)
 class DatasetBundle:
+    """Container holding train/validation/test ECG arrays and basic metadata."""
+
     x_train: np.ndarray
     y_train: np.ndarray
     x_val: np.ndarray
@@ -21,10 +25,12 @@ class DatasetBundle:
 
 
 def expected_csv_paths(data_dir: Path) -> tuple[Path, Path]:
+    """Return the expected train and test CSV paths inside a data directory."""
     return data_dir / "mitbih_train.csv", data_dir / "mitbih_test.csv"
 
 
 def ensure_dataset_exists(data_dir: Path) -> None:
+    """Fail early with a clear message when the required CSV files are missing."""
     train_csv, test_csv = expected_csv_paths(data_dir)
     missing = [path for path in (train_csv, test_csv) if not path.exists()]
     if not missing:
@@ -52,6 +58,8 @@ def load_mitbih_csv(
     train_df = pd.read_csv(train_csv, header=None)
     test_df = pd.read_csv(test_csv, header=None)
 
+    # The public heartbeat CSV format stores all ECG samples first and the class
+    # label in the final column, so every downstream step can share this split.
     x_train_full, y_train_full = _split_features_and_labels(train_df)
     x_test, y_test = _split_features_and_labels(test_df)
     _validate_dataset_arrays(x_train_full, y_train_full, x_test, y_test)
@@ -95,6 +103,8 @@ def make_demo_dataset(
     rng = np.random.default_rng(seed)
     t = np.linspace(0.0, 1.0, input_length, dtype=np.float32)
 
+    # The demo set mimics distinct beat shapes without needing the large real
+    # dataset, which keeps smoke tests fast and reproducible.
     x_all = []
     y_all = []
     for label in range(num_classes):
@@ -127,6 +137,7 @@ def make_demo_dataset(
 
 
 def _split_features_and_labels(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Convert one heartbeat CSV frame into feature and integer-label arrays."""
     values = df.to_numpy(dtype=np.float32)
     if values.ndim != 2 or values.shape[1] < 2:
         raise ValueError("CSV input must contain at least one feature column and one label column.")
@@ -148,6 +159,7 @@ def _split_train_val(
     validation_fraction: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Create a stratified validation split while preserving all classes."""
     labels, counts = np.unique(y, return_counts=True)
     if labels.size < 2:
         raise ValueError("At least two classes are required for stratified train/validation splitting.")
@@ -165,6 +177,7 @@ def _split_train_val(
 
 
 def _add_channel_axis(x: np.ndarray) -> np.ndarray:
+    """Add the single ECG channel dimension expected by Conv1D layers."""
     return x.astype(np.float32)[..., np.newaxis]
 
 
@@ -174,6 +187,7 @@ def _normalize(
     x_test: np.ndarray,
     mode: str,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Apply no, global, or per-sample standardization to ECG features."""
     x_train = x_train.astype(np.float32)
     x_val = x_val.astype(np.float32)
     x_test = x_test.astype(np.float32)
@@ -182,6 +196,8 @@ def _normalize(
         return x_train, x_val, x_test
 
     if mode == "standard":
+        # Global statistics are fit only on training data so validation and test
+        # data stay unseen during preprocessing.
         mean = x_train.mean()
         std = x_train.std() + 1e-7
         return (
@@ -201,6 +217,7 @@ def _normalize(
 
 
 def _validate_validation_fraction(validation_fraction: float) -> None:
+    """Ensure the validation fraction leaves data for both split sides."""
     if not 0.0 < validation_fraction < 1.0:
         raise ValueError("validation_fraction must be greater than 0 and less than 1.")
 
@@ -211,6 +228,7 @@ def _validate_dataset_arrays(
     x_test: np.ndarray,
     y_test: np.ndarray,
 ) -> None:
+    """Check train/test consistency before arrays reach the model code."""
     if x_train.shape[1] != x_test.shape[1]:
         raise ValueError(
             "Train and test CSV files must have the same number of ECG feature columns. "
@@ -228,6 +246,7 @@ def _validate_dataset_arrays(
 
 
 def _per_sample_standardize(x: np.ndarray) -> np.ndarray:
+    """Standardize each heartbeat independently along its time axis."""
     mean = x.mean(axis=1, keepdims=True)
     std = x.std(axis=1, keepdims=True) + 1e-7
     return ((x - mean) / std).astype(np.float32)
@@ -235,6 +254,8 @@ def _per_sample_standardize(x: np.ndarray) -> np.ndarray:
 
 def _simulate_ecg_waveform(t: np.ndarray, label: int, rng: np.random.Generator) -> np.ndarray:
     """Generate a single synthetic ECG-like waveform for a given label."""
+    # Class-dependent centers and amplitudes make the synthetic labels separable
+    # enough for checking training code, without pretending to be real medicine.
     rhythm = 1.0 + 0.08 * label
     p_center = 0.28 + 0.02 * label
     qrs_center = 0.5 + 0.03 * label

@@ -1,3 +1,5 @@
+"""Generate final float32-versus-INT8 comparison plots for the report."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +15,7 @@ CLASS_LABELS = ["Class 0", "Class 1", "Class 2", "Class 3", "Class 4"]
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse final-result directories and hardware deployment annotations."""
     parser = argparse.ArgumentParser(
         description="Create final baseline-vs-INT8 comparison plots for the cap-4 ECG CNN."
     )
@@ -25,6 +28,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Build final comparison plots, CSV summary, and Markdown summary."""
     args = parse_args()
     output_dir = args.output_dir
     quantized_plots_dir = output_dir / "quantized_plots"
@@ -32,6 +36,8 @@ def main() -> None:
     quantized_plots_dir.mkdir(parents=True, exist_ok=True)
     comparison_plots_dir.mkdir(parents=True, exist_ok=True)
 
+    # Inputs are already produced by earlier training and quantization steps; this
+    # script only formats the final evidence used by the report and poster.
     baseline_metrics = load_json(args.baseline_dir / "metrics.json")
     baseline_report = load_json(args.baseline_dir / "classification_report.json")
     baseline_confusion = np.loadtxt(args.baseline_dir / "confusion_matrix.csv", delimiter=",", dtype=int)
@@ -100,14 +106,17 @@ def main() -> None:
 
 
 def load_json(path: Path) -> dict:
+    """Read a JSON artifact from a training or quantization run."""
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def class_ids(report: dict) -> list[str]:
+    """Return class id keys from a scikit-learn classification report."""
     return sorted([key for key in report if key.isdigit()], key=int)
 
 
 def plot_class_metrics(report: dict, output_path: Path, title: str) -> None:
+    """Plot precision, recall, and F1-score for each INT8 class."""
     ids = class_ids(report)
     labels = [CLASS_LABELS[int(class_id)] for class_id in ids]
     precision = [report[class_id]["precision"] for class_id in ids]
@@ -133,6 +142,7 @@ def plot_class_metrics(report: dict, output_path: Path, title: str) -> None:
 
 
 def plot_confusion_matrix(confusion: np.ndarray, output_path: Path, title: str) -> None:
+    """Plot an integer-count confusion matrix."""
     fig, ax = plt.subplots(figsize=(6.5, 5.6))
     image = ax.imshow(confusion, cmap="Blues")
     fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
@@ -143,6 +153,7 @@ def plot_confusion_matrix(confusion: np.ndarray, output_path: Path, title: str) 
 
 
 def plot_normalized_confusion_matrix(confusion: np.ndarray, output_path: Path, title: str) -> None:
+    """Plot row-normalized confusion values for per-class recall inspection."""
     normalized = confusion / confusion.sum(axis=1, keepdims=True)
     fig, ax = plt.subplots(figsize=(6.5, 5.6))
     image = ax.imshow(normalized, cmap="Greens", vmin=0.0, vmax=1.0)
@@ -154,6 +165,7 @@ def plot_normalized_confusion_matrix(confusion: np.ndarray, output_path: Path, t
 
 
 def format_confusion_axis(ax, matrix: np.ndarray, title: str, integer_values: bool) -> None:
+    """Apply labels and cell annotations to a confusion-matrix axis."""
     ax.set_title(title)
     ax.set_xlabel("Predicted class")
     ax.set_ylabel("True class")
@@ -164,12 +176,15 @@ def format_confusion_axis(ax, matrix: np.ndarray, title: str, integer_values: bo
     threshold = matrix.max() / 2.0
     for row in range(matrix.shape[0]):
         for col in range(matrix.shape[1]):
+            # Keep labels legible regardless of whether a cell is near the
+            # top or bottom of the colormap range.
             value = f"{int(matrix[row, col])}" if integer_values else f"{matrix[row, col]:.2f}"
             color = "white" if matrix[row, col] > threshold else "black"
             ax.text(col, row, value, ha="center", va="center", color=color, fontsize=8)
 
 
 def plot_accuracy_loss_comparison(baseline_metrics: dict, int8_metrics: dict, output_path: Path) -> None:
+    """Compare final float32 and INT8 accuracy/loss values."""
     metric_names = ["Accuracy", "Loss"]
     baseline_values = [baseline_metrics["test_accuracy"], baseline_metrics["test_loss"]]
     int8_values = [int8_metrics["int8_accuracy"], int8_metrics["int8_loss"]]
@@ -198,6 +213,7 @@ def plot_macro_metrics_comparison(
     int8_report: dict,
     output_path: Path,
 ) -> None:
+    """Compare macro and weighted metrics for float32 and INT8 outputs."""
     metric_names = ["Macro precision", "Macro recall", "Macro F1", "Weighted F1"]
     baseline_values = [
         baseline_report["macro avg"]["precision"],
@@ -231,6 +247,7 @@ def plot_macro_metrics_comparison(
 
 
 def plot_per_class_f1_comparison(baseline_report: dict, int8_report: dict, output_path: Path) -> None:
+    """Compare per-class F1 before and after quantization."""
     ids = class_ids(baseline_report)
     baseline_values = [baseline_report[class_id]["f1-score"] for class_id in ids]
     int8_values = [int8_report[class_id]["f1-score"] for class_id in ids]
@@ -254,6 +271,7 @@ def plot_per_class_f1_comparison(baseline_report: dict, int8_report: dict, outpu
 
 
 def plot_model_size_comparison(baseline_metrics: dict, int8_metrics: dict, output_path: Path) -> None:
+    """Plot the storage reduction from Keras float32 to TFLite INT8."""
     labels = ["Baseline float32", "Quantized INT8"]
     values_kib = [
         baseline_metrics["keras_model_size_bytes"] / 1024.0,
@@ -280,6 +298,7 @@ def plot_parameters_memory_latency(
     esp32_latency_ms: float,
     output_path: Path,
 ) -> None:
+    """Plot model parameters, memory footprint, and measured ESP32 latency."""
     labels = ["Trainable params", "Model size (KiB)", "Tensor arena (KiB)", "ESP32 latency (ms)"]
     baseline_values = [
         baseline_metrics["parameters"],
@@ -312,6 +331,7 @@ def plot_parameters_memory_latency(
 
 
 def plot_confusion_side_by_side(baseline_confusion: np.ndarray, int8_confusion: np.ndarray, output_path: Path) -> None:
+    """Place float32 and INT8 confusion matrices in one comparison figure."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.4))
     for ax, matrix, title in [
         (axes[0], baseline_confusion, "Baseline Float32"),
@@ -326,6 +346,7 @@ def plot_confusion_side_by_side(baseline_confusion: np.ndarray, int8_confusion: 
 
 
 def annotate_bars(ax, bars, decimals: int) -> None:
+    """Add compact numeric labels above nonzero bars."""
     for bar in bars:
         height = bar.get_height()
         if height == 0:
@@ -342,6 +363,7 @@ def build_summary_table(
     tensor_arena_kib: float,
     esp32_latency_ms: float,
 ) -> pd.DataFrame:
+    """Collect final float32, INT8, and hardware values into one table."""
     rows = [
         ("Test accuracy", baseline_metrics["test_accuracy"], int8_metrics["int8_accuracy"]),
         ("Test loss", baseline_metrics["test_loss"], int8_metrics["int8_loss"]),
@@ -359,6 +381,7 @@ def build_summary_table(
 
 
 def write_markdown_summary(output_path: Path, summary: pd.DataFrame, args: argparse.Namespace) -> None:
+    """Write the final comparison summary used by the report deliverable."""
     lines = [
         "# Final Cap-4 Baseline vs INT8 Comparison",
         "",
@@ -392,6 +415,7 @@ def write_markdown_summary(output_path: Path, summary: pd.DataFrame, args: argpa
 
 
 def dataframe_to_markdown(df: pd.DataFrame) -> str:
+    """Render a small pandas DataFrame as a plain Markdown table."""
     headers = list(df.columns)
     rows = [[format_markdown_value(value) for value in row] for row in df.to_numpy()]
     widths = [
@@ -408,6 +432,7 @@ def dataframe_to_markdown(df: pd.DataFrame) -> str:
 
 
 def format_markdown_value(value) -> str:
+    """Format numbers and missing values for Markdown table cells."""
     if pd.isna(value):
         return "-"
     if isinstance(value, (int, np.integer)):

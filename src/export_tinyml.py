@@ -1,3 +1,5 @@
+"""Create TinyML/ESP32 export artifacts from an int8 ECG TFLite model."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,6 +12,7 @@ import pandas as pd
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse model, metric, output, and memory-budget options."""
     parser = argparse.ArgumentParser(
         description="Export an int8 ECG CNN TFLite model for TinyML/ESP32 simulation and deployment planning."
     )
@@ -24,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Generate the C header, example sketch, and deployment report."""
     args = parse_args()
     if not args.model.exists():
         raise FileNotFoundError(f"TFLite model not found: {args.model}")
@@ -33,6 +37,8 @@ def main() -> None:
     model_info = inspect_tflite_model(args.model)
     metrics = load_json(args.metrics)
 
+    # The report uses either a user-supplied arena size or a conservative
+    # estimate from interpreter tensor shapes.
     arena_bytes = args.arena_bytes or estimate_tensor_arena_bytes(model_info)
     decision = deployment_decision(
         model_size=len(model_bytes),
@@ -78,6 +84,7 @@ def main() -> None:
 
 
 def load_json(path: Path) -> dict:
+    """Load optional JSON metadata, returning an empty dict when unavailable."""
     if not path.exists():
         return {}
     try:
@@ -87,6 +94,7 @@ def load_json(path: Path) -> dict:
 
 
 def inspect_tflite_model(model_path: Path) -> dict:
+    """Inspect tensor shapes, quantization, and operators in a TFLite model."""
     try:
         import tensorflow as tf
     except ImportError:
@@ -107,6 +115,8 @@ def inspect_tflite_model(model_path: Path) -> dict:
 
     tensor_bytes = 0
     for tensor in tensor_details:
+        # This is a rough desktop-interpreter view of tensor storage, not a
+        # perfect TFLite Micro arena measurement.
         shape = tensor.get("shape", [])
         dtype = np.dtype(tensor["dtype"])
         element_count = int(np.prod(shape)) if len(shape) else 1
@@ -133,6 +143,7 @@ def inspect_tflite_model(model_path: Path) -> dict:
 
 
 def tensor_summary(tensor: dict) -> dict:
+    """Create a serializable summary of one TFLite tensor."""
     scale, zero_point = tensor.get("quantization", (0.0, 0))
     return {
         "name": tensor.get("name", ""),
@@ -145,6 +156,7 @@ def tensor_summary(tensor: dict) -> dict:
 
 
 def tensor_nbytes(tensor: dict) -> int:
+    """Estimate the raw byte count of one tensor from shape and dtype."""
     shape = tensor.get("shape", [])
     dtype = np.dtype(tensor["dtype"])
     element_count = int(np.prod(shape)) if len(shape) else 1
@@ -152,6 +164,7 @@ def tensor_nbytes(tensor: dict) -> int:
 
 
 def estimate_tensor_arena_bytes(model_info: dict) -> int:
+    """Estimate a conservative TFLite Micro tensor arena size."""
     tensor_bytes = model_info.get("tensor_bytes")
     if tensor_bytes is None:
         return 64 * 1024
@@ -160,6 +173,7 @@ def estimate_tensor_arena_bytes(model_info: dict) -> int:
 
 
 def deployment_decision(model_size: int, arena_bytes: int, flash_budget: int, sram_budget: int) -> str:
+    """Classify whether the exported model fits the assumed ESP32 budgets."""
     flash_ok = model_size < flash_budget * 0.75
     ram_ok = arena_bytes < sram_budget * 0.75
     if flash_ok and ram_ok:
@@ -170,6 +184,7 @@ def deployment_decision(model_size: int, arena_bytes: int, flash_budget: int, sr
 
 
 def write_model_header(model_bytes: bytes, model_name: str, output_path: Path) -> None:
+    """Write the TFLite flatbuffer as a C array for microcontroller builds."""
     array_name = f"g_{model_name}_model"
     length_name = f"g_{model_name}_model_len"
     hex_values = [f"0x{value:02x}" for value in model_bytes]
@@ -185,6 +200,7 @@ def write_model_header(model_bytes: bytes, model_name: str, output_path: Path) -
         f"alignas(16) const unsigned char {array_name}[] PROGMEM = {{",
     ]
     for start in range(0, len(hex_values), 12):
+        # Wrap the byte array so generated headers stay reviewable in a text editor.
         lines.append("  " + ", ".join(hex_values[start : start + 12]) + ",")
     lines.extend(
         [
@@ -197,6 +213,7 @@ def write_model_header(model_bytes: bytes, model_name: str, output_path: Path) -
 
 
 def write_arduino_sketch(model_name: str, arena_bytes: int, output_path: Path) -> None:
+    """Write a minimal Arduino-style TensorFlow Lite Micro inference sketch."""
     array_name = f"g_{model_name}_model"
     header_name = f"{model_name}_model.h"
     sketch = f"""
@@ -282,6 +299,7 @@ def write_arduino_sketch(model_name: str, arena_bytes: int, output_path: Path) -
 
 
 def write_markdown_report(report: dict, output_path: Path) -> None:
+    """Write the deployment report in a format suitable for project results."""
     metrics = report.get("int8_metrics", {})
     input_info = report.get("input") or {}
     output_info = report.get("output") or {}
@@ -348,6 +366,7 @@ def write_markdown_report(report: dict, output_path: Path) -> None:
 
 
 def format_metric(value) -> str:
+    """Format optional numeric metrics for Markdown output."""
     if value is None or value == "":
         return "not recorded"
     try:

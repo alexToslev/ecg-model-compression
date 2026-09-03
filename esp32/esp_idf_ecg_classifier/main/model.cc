@@ -1,3 +1,5 @@
+// Binds the generated model header to stable names used by inference code.
+
 #include "model.h"
 
 #include "ecg_cnn_cap4_int8_model.h"

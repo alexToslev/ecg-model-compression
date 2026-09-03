@@ -1,3 +1,4 @@
+# Runtime dependencies for training, evaluation, plotting, and TFLite export.
 numpy
 pandas
 scikit-learn

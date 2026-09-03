@@ -1,3 +1,5 @@
+"""Create plots and Markdown summaries for ECG training runs."""
+
 from __future__ import annotations
 
 import argparse
@@ -19,6 +21,7 @@ CLASS_NAMES = {
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the run directory and optional quantized comparison directory."""
     parser = argparse.ArgumentParser(description="Create plots and a short written summary for a baseline run.")
     parser.add_argument("--run-dir", type=Path, default=Path("results/improved_cnn_scratch"))
     parser.add_argument(
@@ -31,6 +34,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Load saved run artifacts and regenerate plots plus Markdown summary."""
     args = parse_args()
     run_dir = args.run_dir
     plots_dir = run_dir / "plots"
@@ -41,6 +45,8 @@ def main() -> None:
     report = json.loads((run_dir / "classification_report.json").read_text(encoding="utf-8"))
     confusion = np.loadtxt(run_dir / "confusion_matrix.csv", delimiter=",", dtype=int)
 
+    # The summary command is intentionally artifact-driven so a completed
+    # training run can be documented without retraining the model.
     plot_learning_curves(history, plots_dir / "learning_curves.png")
     plot_class_metrics(report, plots_dir / "class_metrics.png")
     plot_confusion_matrix(confusion, plots_dir / "confusion_matrix.png")
@@ -76,6 +82,7 @@ def main() -> None:
 
 
 def _summary_text_for_run(run_dir: Path) -> dict[str, str]:
+    """Return reusable text blocks for the generated run summary."""
     return {
         "title": "Improved 1D CNN Summary",
         "model_description": "A class-weighted improved 1D CNN was trained on preprocessed MIT-BIH heartbeat segments.",
@@ -84,6 +91,7 @@ def _summary_text_for_run(run_dir: Path) -> dict[str, str]:
 
 
 def plot_learning_curves(history: pd.DataFrame, output_path: Path) -> None:
+    """Plot training and validation accuracy/loss over epochs."""
     epochs = np.arange(1, len(history) + 1)
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
@@ -109,6 +117,7 @@ def plot_learning_curves(history: pd.DataFrame, output_path: Path) -> None:
 
 
 def plot_class_metrics(report: dict, output_path: Path) -> None:
+    """Plot precision, recall, and F1-score for each class."""
     class_ids = [key for key in report.keys() if key.isdigit()]
     labels = [CLASS_NAMES.get(class_id, f"Class {class_id}") for class_id in class_ids]
     precision = [report[class_id]["precision"] for class_id in class_ids]
@@ -136,6 +145,7 @@ def plot_class_metrics(report: dict, output_path: Path) -> None:
 
 
 def plot_confusion_matrix(confusion: np.ndarray, output_path: Path) -> None:
+    """Plot the confusion matrix with readable cell counts."""
     fig, ax = plt.subplots(figsize=(6, 5))
     image = ax.imshow(confusion, cmap="Blues")
     fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
@@ -152,6 +162,8 @@ def plot_confusion_matrix(confusion: np.ndarray, output_path: Path) -> None:
     threshold = confusion.max() / 2
     for row in range(confusion.shape[0]):
         for col in range(confusion.shape[1]):
+            # Switch text color above the midpoint so labels stay visible on
+            # both dark and light cells.
             color = "white" if confusion[row, col] > threshold else "black"
             ax.text(col, row, str(confusion[row, col]), ha="center", va="center", color=color, fontsize=8)
 
@@ -166,6 +178,7 @@ def plot_baseline_quantized_comparison(
     accuracy_path: Path,
     size_path: Path,
 ) -> None:
+    """Plot accuracy and model-size tradeoffs against an int8 model."""
     labels = ["Baseline", "Quantized int8"]
     accuracy_values = [baseline_metrics["test_accuracy"], float(quantized_metrics.get("int8_accuracy", np.nan))]
 
@@ -206,6 +219,7 @@ def write_summary(
     model_description: str | None = None,
     next_step: str = "Run int8 TensorFlow Lite quantization and compare accuracy/model size against this float32 baseline.",
 ) -> None:
+    """Write a narrative Markdown summary from saved metrics and reports."""
     final = history.iloc[-1]
     supports = {class_id: int(report[class_id]["support"]) for class_id in report if class_id.isdigit()}
     recalls = {class_id: report[class_id]["recall"] for class_id in report if class_id.isdigit()}
@@ -217,6 +231,8 @@ def write_summary(
         )
 
     lines = [
+        # The written summary mirrors the final report language so run folders
+        # remain understandable even when opened outside the main manuscript.
         f"# {title}",
         "",
         "## What was run",

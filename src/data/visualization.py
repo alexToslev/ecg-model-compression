@@ -1,3 +1,5 @@
+"""Generate plots and small diagnostics reports for ECG datasets."""
+
 from __future__ import annotations
 
 import json
@@ -17,6 +19,8 @@ def plot_signal_examples(
     """Plot representative signals for each class in the dataset."""
     x = x.squeeze(-1)
     num_classes = len(np.unique(y))
+    # Keep a stable grid shape even when there is only one class or one sample
+    # per class, because matplotlib changes the axes type in those cases.
     figure, axes = plt.subplots(num_classes, samples_per_class, figsize=(samples_per_class * 3, num_classes * 2.5))
 
     if num_classes == 1:
@@ -107,6 +111,8 @@ def visualize_dataset(
     """Generate key dataset visualizations for training and validation."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # These three plots are the quick sanity checks used throughout the report:
+    # signal shape examples, class imbalance, and split consistency.
     plot_signal_examples(
         dataset.x_train,
         dataset.y_train,
@@ -153,6 +159,8 @@ def build_dataset_diagnostics(dataset) -> dict:
 
     for split_name, (x_split, y_split) in split_arrays.items():
         flattened = x_split.squeeze(-1)
+        # Store plain Python numbers so the diagnostics JSON is easy to inspect
+        # and does not depend on NumPy-specific serialization.
         diagnostics["splits"][split_name] = {
             "samples": int(len(y_split)),
             "shape": [int(value) for value in x_split.shape],
@@ -204,6 +212,7 @@ def write_dataset_diagnostics_markdown(diagnostics: dict, output_path: Path) -> 
 
 
 def _class_counts(y: np.ndarray, num_classes: int) -> dict[str, int]:
+    """Return counts for every class, including classes absent from a split."""
     labels, counts = np.unique(y, return_counts=True)
     observed = {int(label): int(count) for label, count in zip(labels, counts)}
     return {str(class_id): observed.get(class_id, 0) for class_id in range(num_classes)}

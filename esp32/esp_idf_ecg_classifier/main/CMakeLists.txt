@@ -1,3 +1,4 @@
+# Firmware component sources and private ESP-IDF dependencies.
 idf_component_register(
     SRCS
         "main.cc"

@@ -1,3 +1,5 @@
+"""Export reproducible real MIT-BIH ECG samples as int8 C arrays."""
+
 from __future__ import annotations
 
 import argparse
@@ -10,6 +12,7 @@ import pandas as pd
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse sample-selection, quantization, and output-header options."""
     parser = argparse.ArgumentParser(
         description="Export real MIT-BIH test beats as int8 C arrays for ESP32 TFLite Micro inference."
     )
@@ -34,6 +37,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Select samples, quantize them, and write ESP32 helper source files."""
     args = parse_args()
     if args.samples_per_class < 1:
         raise ValueError("--samples-per-class must be at least 1")
@@ -50,6 +54,8 @@ def main() -> None:
     )
     quantized = quantize_features(features, input_scale, input_zero_point)
 
+    # The generated header is intentionally self-contained so the ESP32 firmware
+    # can run a fixed, reproducible hardware sanity test without loading CSVs.
     args.output_dir.mkdir(parents=True, exist_ok=True)
     sample_header_path = args.output_dir / args.sample_header
     main_functions_path = args.output_dir / "main_functions_real_samples.cc"
@@ -89,6 +95,7 @@ def main() -> None:
 
 
 def resolve_input_quantization(args: argparse.Namespace) -> tuple[float, int]:
+    """Resolve input quantization from CLI arguments or a saved report JSON."""
     if args.input_scale is not None and args.input_zero_point is not None:
         return args.input_scale, args.input_zero_point
 
@@ -120,6 +127,7 @@ def select_samples(
     input_scale: float,
     input_zero_point: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Choose a reproducible set of test beats, optionally requiring correctness."""
     if not csv_path.exists():
         raise FileNotFoundError(f"MIT-BIH test CSV not found: {csv_path}")
 
@@ -134,6 +142,8 @@ def select_samples(
     rng = np.random.default_rng(seed)
     predicted_labels = load_tflite_predictions(model_path, features, input_scale, input_zero_point) if prefer_correct else None
     for label in sorted(np.unique(labels)):
+        # Sampling without replacement keeps each exported beat unique while the
+        # seed makes the hardware test repeatable.
         label_indices = np.flatnonzero(labels == label)
         if label_indices.size < samples_per_class:
             raise ValueError(f"Class {label} only has {label_indices.size} rows")
@@ -155,6 +165,7 @@ def load_tflite_predictions(
     input_scale: float,
     input_zero_point: int,
 ) -> np.ndarray:
+    """Run the TFLite model over candidate samples for correctness filtering."""
     if not model_path.exists():
         raise FileNotFoundError(f"TFLite model not found: {model_path}")
 
@@ -170,6 +181,7 @@ def load_tflite_predictions(
     predictions = np.empty(features.shape[0], dtype=np.int32)
 
     for index, feature in enumerate(features):
+        # Only argmax is needed here; this helper filters samples, not metrics.
         quantized = quantize_features(feature[np.newaxis, :], input_scale, input_zero_point)
         interpreter.set_tensor(input_info["index"], quantized.reshape(input_info["shape"]))
         interpreter.invoke()
@@ -180,6 +192,7 @@ def load_tflite_predictions(
 
 
 def quantize_features(features: np.ndarray, scale: float, zero_point: int) -> np.ndarray:
+    """Quantize float ECG feature rows to the model's int8 input range."""
     if scale <= 0.0:
         raise ValueError("Input scale must be positive")
     quantized = np.round(features / scale + zero_point)
@@ -194,6 +207,7 @@ def write_sample_header(
     input_scale: float,
     input_zero_point: int,
 ) -> None:
+    """Write selected ECG samples, labels, and source CSV rows as a C header."""
     sample_count, sample_length = quantized.shape
     lines = [
         "#pragma once",
@@ -208,6 +222,7 @@ def write_sample_header(
     ]
     for sample in quantized:
         lines.append("  {")
+        # Keep 16 values per row so the generated sample header remains readable.
         for start in range(0, sample_length, 16):
             values = ", ".join(f"{int(value):4d}" for value in sample[start : start + 16])
             lines.append(f"    {values},")
@@ -235,6 +250,7 @@ def write_main_functions_example(
     sample_header: str,
     model_array_name: str,
 ) -> None:
+    """Write a reference TFLite Micro setup/loop using the exported samples."""
     source = f"""
     #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
     #include "tensorflow/lite/micro/micro_interpreter.h"

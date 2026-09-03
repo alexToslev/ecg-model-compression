@@ -1,3 +1,5 @@
+"""Convert Keras ECG models to fully int8 TensorFlow Lite artifacts."""
+
 from __future__ import annotations
 
 import argparse
@@ -13,6 +15,7 @@ from src.data.mitbih_csv import load_mitbih_csv, make_demo_dataset
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse quantization inputs, calibration settings, and output path."""
     parser = argparse.ArgumentParser(description="Convert a trained ECG model with full int8 post-training quantization.")
     parser.add_argument("--model", type=Path, default=Path("results/improved_cnn_scratch/tiny_ecg_cnn.keras"))
     parser.add_argument("--data-dir", type=Path, default=Path("data/processed"))
@@ -24,6 +27,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Run full-int8 post-training quantization and evaluate the result."""
     args = parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -32,6 +36,8 @@ def main() -> None:
 
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    # Representative data calibrates activation ranges so both model input and
+    # output can use int8 tensors instead of float tensors.
     converter.representative_dataset = representative_dataset(dataset.x_train, args.representative_samples)
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
     converter.inference_input_type = tf.int8
@@ -47,6 +53,8 @@ def main() -> None:
     metrics["representative_samples"] = min(args.representative_samples, len(dataset.x_train))
     baseline_metrics = _load_baseline_metrics(args.model.parent)
     if baseline_metrics is not None:
+        # When baseline metrics are available, keep the size and accuracy tradeoff
+        # in the same JSON file as the quantized model evaluation.
         metrics["baseline_test_accuracy"] = float(baseline_metrics["test_accuracy"])
         metrics["baseline_test_loss"] = float(baseline_metrics["test_loss"])
         metrics["baseline_size_bytes"] = int(
@@ -66,7 +74,9 @@ def main() -> None:
 
 
 def representative_dataset(x_train: np.ndarray, max_samples: int):
+    """Return a TensorFlow Lite representative dataset generator."""
     def generator():
+        """Yield calibration samples in the shape expected by the converter."""
         for sample in x_train[:max_samples]:
             yield [sample[np.newaxis, ...].astype(np.float32)]
 
@@ -74,6 +84,7 @@ def representative_dataset(x_train: np.ndarray, max_samples: int):
 
 
 def evaluate_tflite(model_path: Path, x_test: np.ndarray, y_test: np.ndarray) -> dict[str, float]:
+    """Run the int8 TFLite model over the test set and save reports."""
     interpreter = tf.lite.Interpreter(model_path=str(model_path))
     interpreter.allocate_tensors()
 
@@ -86,6 +97,8 @@ def evaluate_tflite(model_path: Path, x_test: np.ndarray, y_test: np.ndarray) ->
     probabilities = []
     predictions = []
     for x, y in zip(x_test, y_test):
+        # The interpreter expects quantized input bytes; dequantizing the output
+        # lets loss and reports stay comparable with the float32 baseline.
         model_input = quantize_input(x, input_details, input_scale, input_zero_point)
         interpreter.set_tensor(input_details["index"], model_input[np.newaxis, ...])
         interpreter.invoke()
@@ -122,6 +135,7 @@ def quantize_input(
     input_scale: float,
     input_zero_point: int,
 ) -> np.ndarray:
+    """Map float ECG input samples into the model input dtype and range."""
     dtype = input_details["dtype"]
     if not input_scale:
         raise ValueError("Quantized TFLite input is missing a valid scale.")
@@ -132,18 +146,21 @@ def quantize_input(
 
 
 def dequantize_output(output: np.ndarray, output_scale: float, output_zero_point: int) -> np.ndarray:
+    """Convert quantized model outputs back to floating-point scores."""
     if not output_scale:
         raise ValueError("Quantized TFLite output is missing a valid scale.")
     return (output.astype(np.float32) - output_zero_point) * output_scale
 
 
 def sparse_cross_entropy_from_probabilities(probabilities: np.ndarray, labels: np.ndarray) -> float:
+    """Compute sparse cross-entropy from already-normalized class scores."""
     probabilities = probabilities / np.sum(probabilities, axis=1, keepdims=True)
     correct_log_probs = -np.log(probabilities[np.arange(len(labels)), labels] + 1e-12)
     return float(np.mean(correct_log_probs))
 
 
 def _load_baseline_metrics(model_dir: Path) -> dict | None:
+    """Read baseline metrics when the float32 run saved them beside the model."""
     metrics_path = model_dir / "metrics.json"
     if not metrics_path.exists():
         return None
@@ -154,6 +171,7 @@ def _load_baseline_metrics(model_dir: Path) -> dict | None:
 
 
 def write_quantization_report(metrics: dict, output_dir: Path) -> None:
+    """Write Markdown and plots summarizing the quantized model."""
     if "baseline_test_accuracy" in metrics:
         plot_accuracy_comparison(metrics, output_dir / "cnn_quantization_accuracy_comparison.png")
         plot_size_comparison(metrics, output_dir / "cnn_quantization_size_comparison.png")
@@ -207,6 +225,7 @@ def write_quantization_report(metrics: dict, output_dir: Path) -> None:
 
 
 def plot_accuracy_comparison(metrics: dict, output_path: Path) -> None:
+    """Plot float32 versus int8 accuracy when both values are available."""
     labels = ["Baseline", "PTQ int8"]
     values = [metrics["baseline_test_accuracy"], metrics["int8_accuracy"]]
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -222,6 +241,7 @@ def plot_accuracy_comparison(metrics: dict, output_path: Path) -> None:
 
 
 def plot_size_comparison(metrics: dict, output_path: Path) -> None:
+    """Plot float32 versus int8 model size in kilobytes."""
     labels = ["Baseline", "PTQ int8"]
     values = [metrics["baseline_size_bytes"] / 1024.0, metrics["tflite_size_bytes"] / 1024.0]
     fig, ax = plt.subplots(figsize=(6, 4))

@@ -1,3 +1,5 @@
+// Five-per-class MIT-BIH test beats selected for the final ESP32 hardware run.
+
 #pragma once
 #include <cstdint>
 

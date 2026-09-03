@@ -1,3 +1,5 @@
+// Early Arduino-style ESP32 sketch generated for TinyML deployment planning.
+
 #include <TensorFlowLite_ESP32.h>
 #include "tensorflow/lite/micro/all_ops_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -6,6 +8,8 @@
 #include "tiny_ecg_cnn_int8_model.h"
 
 namespace {
+// Prototype interpreter state for checking that the exported int8 model can be
+// allocated and invoked from a simple ESP32 sketch.
 constexpr int kTensorArenaSize = 177152;
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 
@@ -17,6 +21,7 @@ tflite::AllOpsResolver resolver;
 }
 
 void setup() {
+  // Load the embedded TFLite model and allocate the tensor arena once at boot.
   Serial.begin(115200);
   model = tflite::GetModel(g_tiny_ecg_cnn_int8_model);
   if (model->version() != TFLITE_SCHEMA_VERSION) {
@@ -40,6 +45,8 @@ void setup() {
 }
 
 void loop() {
+  // This prototype uses a zero-filled quantized input; the final firmware
+  // replaces it with exported MIT-BIH test beats.
   if (input == nullptr || output == nullptr) {
     delay(1000);
     return;
@@ -62,6 +69,7 @@ void loop() {
 
   int best_class = 0;
   int8_t best_score = output->data.int8[0];
+  // The output tensor is int8, so the largest quantized score gives the class.
   for (int i = 1; i < output->bytes; ++i) {
     if (output->data.int8[i] > best_score) {
       best_score = output->data.int8[i];

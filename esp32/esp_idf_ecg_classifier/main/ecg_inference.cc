@@ -1,3 +1,5 @@
+// TensorFlow Lite Micro inference loop for the deployed ECG classifier.
+
 #include "ecg_inference.h"
 
 #include <cstdint>
@@ -16,6 +18,8 @@ namespace {
 constexpr int kClassCount = 5;
 constexpr int kTensorArenaSize = 80 * 1024;
 
+// TFLite Micro requires a statically allocated arena because dynamic heap use is
+// avoided on small embedded targets.
 alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
@@ -29,6 +33,7 @@ int64_t minimum_latency_us = std::numeric_limits<int64_t>::max();
 int64_t maximum_latency_us = 0;
 
 void ResetRunStatistics() {
+  // Reset after each full pass over the embedded sample set.
   correct_count = 0;
   total_latency_us = 0;
   minimum_latency_us = std::numeric_limits<int64_t>::max();
@@ -36,6 +41,7 @@ void ResetRunStatistics() {
 }
 
 void PrintRunSummary() {
+  // Summarize the balanced 25-beat hardware sanity run.
   const double mean_latency_ms =
       static_cast<double>(total_latency_us) / kEcgSampleCount / 1000.0;
 
@@ -53,6 +59,8 @@ void PrintRunSummary() {
 }  // namespace
 
 void InitializeEcgClassifier() {
+  // Set up platform hooks and validate that the embedded flatbuffer matches the
+  // schema supported by the linked TFLite Micro runtime.
   tflite::InitializeTarget();
 
   model = tflite::GetModel(g_ecg_model_data);
@@ -63,6 +71,8 @@ void InitializeEcgClassifier() {
   }
 
   static tflite::MicroMutableOpResolver<8> resolver;
+  // Register only the operators used by the exported model to keep firmware
+  // size and resolver memory smaller than the all-ops resolver.
   resolver.AddConv2D();
   resolver.AddDepthwiseConv2D();
   resolver.AddFullyConnected();
@@ -84,6 +94,8 @@ void InitializeEcgClassifier() {
 
   input = interpreter->input(0);
   output = interpreter->output(0);
+  // The deployment path is fully INT8; float tensors would hide a broken
+  // quantization/export step.
   if (input->type != kTfLiteInt8 || output->type != kTfLiteInt8) {
     MicroPrintf("Expected fully int8 model tensors");
     interpreter = nullptr;
@@ -100,6 +112,8 @@ void InitializeEcgClassifier() {
 }
 
 void RunNextEcgSample() {
+  // One call feeds one embedded heartbeat, invokes the model, and logs the
+  // prediction and latency over serial.
   if (interpreter == nullptr || input == nullptr || output == nullptr) {
     MicroPrintf("ECG interpreter is not ready");
     return;
@@ -115,6 +129,7 @@ void RunNextEcgSample() {
     input->data.int8[index] = kEcgSamples[sample_index][index];
   }
 
+  // Measure only Invoke(), not serial printing or sample-copy overhead.
   const int64_t start_us = esp_timer_get_time();
   const TfLiteStatus invoke_status = interpreter->Invoke();
   const int64_t elapsed_us = esp_timer_get_time() - start_us;
@@ -133,6 +148,8 @@ void RunNextEcgSample() {
 
   for (int class_index = 0; class_index < kClassCount; ++class_index) {
     const int8_t quantized_score = output->data.int8[class_index];
+    // Dequantized scores are printed for readability; class selection uses the
+    // quantized values directly because all outputs share one scale/zero point.
     const float score =
         (quantized_score - output->params.zero_point) * output->params.scale;
     if (quantized_score > best_quantized_score) {

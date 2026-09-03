@@ -1,3 +1,5 @@
+"""Command-line interface that routes project tasks to the correct module."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,6 +8,7 @@ from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse the shared CLI and all supported project subcommands."""
     parser = argparse.ArgumentParser(
         prog="python -m src",
         description="ECG CNN improvement toolkit",
@@ -106,10 +109,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def forwarded_argv(args: argparse.Namespace) -> list[str]:
+    """Rebuild ``sys.argv`` so existing script entry points can share this CLI."""
     forwarded: list[str] = [sys.argv[0]]
     for key, value in vars(args).items():
         if key == "command" or value is None:
             continue
+        # argparse stores BooleanOptionalAction as a Python bool, so keep the
+        # generated flag consistent with the underlying training script.
         if key == "augment_rare_classes" and value is False:
             forwarded.append("--no-augment-rare-classes")
             continue
@@ -123,9 +129,12 @@ def forwarded_argv(args: argparse.Namespace) -> list[str]:
 
 
 def main() -> None:
+    """Dispatch the requested subcommand after normalizing its arguments."""
     args = parse_args()
     sys.argv = forwarded_argv(args)
 
+    # Imports stay inside the branches so optional heavy dependencies, such as
+    # TensorFlow, are loaded only by the commands that actually need them.
     if args.command == "train":
         from src.train_cnn import main as train_main
 

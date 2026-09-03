@@ -1,3 +1,5 @@
+"""Manual NumPy 1D CNN layers used for the ECG classifier."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,6 +9,8 @@ import numpy as np
 
 # Manual 1D convolution layer.
 class Conv1D:
+    """Small Conv1D layer with explicit forward, backward, and update steps."""
+
     # Initializes layer parameters and caches.
     def __init__(
         self,
@@ -20,6 +24,8 @@ class Conv1D:
         self.kernel_size = kernel_size
         self.padding = padding
 
+        # He-style scaling keeps early activations from exploding or vanishing
+        # in the ReLU-based convolution stack.
         scale = np.sqrt(2.0 / (in_channels * kernel_size))
         self.weights = (np.random.randn(out_channels, in_channels, kernel_size) * scale).astype(np.float32)
         self.bias = np.zeros(out_channels, dtype=np.float32)
@@ -36,6 +42,7 @@ class Conv1D:
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Apply same-padded or valid 1D convolution to a batch of ECG windows."""
         if self.padding == "same":
             pad_left = (self.kernel_size - 1) // 2
             pad_right = self.kernel_size - 1 - pad_left
@@ -50,6 +57,8 @@ class Conv1D:
         )
 
         if training:
+            # Store the unfolded windows because the backward pass needs the
+            # exact receptive fields that produced each output position.
             self.cache_padded = x_padded
             self.cache_patches = patches
 
@@ -57,15 +66,20 @@ class Conv1D:
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Propagate gradients through convolution weights and input samples."""
         assert self.cache_padded is not None and self.cache_patches is not None
         out_length = grad_output.shape[1]
 
+        # einsum keeps the convolution math visible: every output gradient is
+        # matched with the input patch that produced it.
         self.grad_bias = grad_output.sum(axis=(0, 1))
         self.grad_weights = np.einsum("nlkc,nlf->fck", self.cache_patches, grad_output)
 
         grad_patches = np.einsum("nlf,fck->nlkc", grad_output, self.weights)
         grad_input_padded = np.zeros_like(self.cache_padded, dtype=np.float32)
 
+        # Overlapping convolution windows contribute gradients to the same input
+        # positions, so they are accumulated back into the padded input tensor.
         for step in range(out_length):
             grad_input_padded[:, step : step + self.kernel_size, :] += grad_patches[:, step, :, :]
 
@@ -79,6 +93,7 @@ class Conv1D:
 
     # Updates trainable weights.
     def update(self, learning_rate: float, optimizer: str = "sgd") -> None:
+        """Apply either SGD or the local Adam implementation to this layer."""
         if optimizer == "adam":
             self._adam_step += 1
             self.weights = adam_update(self.weights, self.grad_weights, self._mw, self._vw, self._adam_step, learning_rate)
@@ -91,24 +106,30 @@ class Conv1D:
 
 # ReLU activation layer.
 class ReLU:
+    """Rectified linear unit activation with a cached mask for backpropagation."""
+
     # Initializes layer parameters and caches.
     def __init__(self):
         self.cache_input: np.ndarray | None = None
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Pass through positive activations and clamp negatives to zero."""
         if training:
             self.cache_input = x
         return np.maximum(x, 0.0)
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Block gradients where the cached activation was not positive."""
         assert self.cache_input is not None
         return grad_output * (self.cache_input > 0.0)
 
 
 # Max-pooling layer for short ECG windows.
 class MaxPool1D:
+    """One-dimensional max pooling layer for downsampling ECG features."""
+
     # Initializes layer parameters and caches.
     def __init__(self, pool_size: int = 2):
         self.pool_size = pool_size
@@ -117,6 +138,7 @@ class MaxPool1D:
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Keep the strongest activation inside each non-overlapping pool."""
         batch_size, length, channels = x.shape
         out_length = length // self.pool_size
         output = np.zeros((batch_size, out_length, channels), dtype=np.float32)
@@ -136,6 +158,7 @@ class MaxPool1D:
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Route each pooled gradient back to the winning input position."""
         assert self.cache_input is not None and self.cache_indices is not None
         batch_size, out_length, channels = grad_output.shape
         grad_input = np.zeros_like(self.cache_input, dtype=np.float32)
@@ -151,28 +174,36 @@ class MaxPool1D:
 
 # Averages each feature channel over time.
 class GlobalAveragePool1D:
+    """Collapse the time axis while keeping one value per feature channel."""
+
     # Initializes layer parameters and caches.
     def __init__(self):
         self.cache_length: int | None = None
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Average all temporal positions for each channel."""
         if training:
             self.cache_length = x.shape[1]
         return x.mean(axis=1)
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Spread each channel gradient evenly across the original time axis."""
         assert self.cache_length is not None
         return np.repeat(grad_output[:, None, :] / self.cache_length, self.cache_length, axis=1)
 
 
 # Fully connected layer.
 class Dense:
+    """Fully connected layer with manual gradients and optimizer state."""
+
     # Initializes layer parameters and caches.
     def __init__(self, in_features: int, out_features: int):
         self.in_features = in_features
         self.out_features = out_features
+        # The dense layers also use ReLU-friendly initialization because the
+        # hidden dense layer is followed by a ReLU activation.
         self.weights = (np.random.randn(in_features, out_features) * np.sqrt(2.0 / in_features)).astype(np.float32)
         self.bias = np.zeros(out_features, dtype=np.float32)
         self.grad_weights = np.zeros_like(self.weights)
@@ -187,12 +218,14 @@ class Dense:
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Apply the affine transform for a batch of feature vectors."""
         if training:
             self.cache_input = x
         return x @ self.weights + self.bias
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Compute parameter gradients and return gradients for the input."""
         assert self.cache_input is not None
         self.grad_weights = self.cache_input.T @ grad_output
         self.grad_bias = grad_output.sum(axis=0)
@@ -200,6 +233,7 @@ class Dense:
 
     # Updates trainable weights.
     def update(self, learning_rate: float, optimizer: str = "sgd") -> None:
+        """Apply either SGD or Adam to the dense parameters."""
         if optimizer == "adam":
             self._adam_step += 1
             self.weights = adam_update(self.weights, self.grad_weights, self._mw, self._vw, self._adam_step, learning_rate)
@@ -212,6 +246,8 @@ class Dense:
 
 # Randomly drops hidden features during training.
 class Dropout:
+    """Inverted dropout used only during training."""
+
     # Initializes layer parameters and caches.
     def __init__(self, rate: float):
         self.rate = rate
@@ -219,6 +255,7 @@ class Dropout:
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Randomly zero hidden features and rescale the remaining activations."""
         if not training or self.rate <= 0.0:
             return x
         keep_probability = 1.0 - self.rate
@@ -227,6 +264,7 @@ class Dropout:
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> np.ndarray:
+        """Apply the same dropout mask to the backward gradient."""
         if self.rate <= 0.0:
             return grad_output
         assert self.mask is not None
@@ -235,6 +273,8 @@ class Dropout:
 
 # Weighted softmax loss for imbalanced classes.
 class SoftmaxCrossEntropy:
+    """Sparse softmax cross-entropy with optional per-class weights."""
+
     # Initializes layer parameters and caches.
     def __init__(self):
         self.probabilities: np.ndarray | None = None
@@ -249,6 +289,7 @@ class SoftmaxCrossEntropy:
         labels: np.ndarray,
         class_weights: dict[int, float] | None = None,
     ) -> float:
+        """Compute weighted cross-entropy and cache probabilities for backward."""
         shifted = logits - np.max(logits, axis=1, keepdims=True)
         exp_scores = np.exp(shifted)
         probabilities = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
@@ -261,11 +302,14 @@ class SoftmaxCrossEntropy:
         self.probabilities = probabilities
         self.labels = labels
         self.sample_weights = sample_weights
+        # Normalizing by the sum of sample weights keeps gradient scale stable
+        # when class weighting changes between experiments.
         self.weight_sum = float(np.sum(sample_weights) + 1e-12)
         return float(np.sum(losses * sample_weights) / self.weight_sum)
 
     # Computes gradients for backpropagation.
     def backward(self) -> np.ndarray:
+        """Return the gradient of the cached softmax cross-entropy loss."""
         assert self.probabilities is not None and self.labels is not None and self.sample_weights is not None
         grad = self.probabilities.copy()
         grad[np.arange(len(self.labels)), self.labels] -= 1.0
@@ -275,8 +319,11 @@ class SoftmaxCrossEntropy:
 
 # Complete manual CNN model.
 class CNNFromScratch:
+    """End-to-end 1D CNN assembled from the manual layer classes above."""
+
     # Initializes layer parameters and caches.
     def __init__(self, input_length: int, num_classes: int, dropout_rate: float = 0.2):
+        """Create the compact three-convolution ECG architecture."""
         self.input_length = input_length
         self.num_classes = num_classes
         self.dropout_rate = dropout_rate
@@ -301,6 +348,7 @@ class CNNFromScratch:
 
     # Computes the forward pass.
     def forward(self, x: np.ndarray, training: bool = True) -> np.ndarray:
+        """Run ECG windows through convolution, pooling, dense, and output layers."""
         x = self.conv1.forward(x, training=training)
         x = self.relu1.forward(x, training=training)
         x = self.pool1.forward(x, training=training)
@@ -320,6 +368,7 @@ class CNNFromScratch:
 
     # Computes gradients for backpropagation.
     def backward(self, grad_output: np.ndarray) -> None:
+        """Backpropagate the output gradient through the full model."""
         grad = self.output_layer.backward(grad_output)
         grad = self.dropout.backward(grad)
         grad = self.relu4.backward(grad)
@@ -339,6 +388,7 @@ class CNNFromScratch:
 
     # Updates trainable weights.
     def update(self, learning_rate: float, optimizer: str = "sgd") -> None:
+        """Update every trainable layer with the selected optimizer."""
         self.conv1.update(learning_rate, optimizer)
         self.conv2.update(learning_rate, optimizer)
         self.conv3.update(learning_rate, optimizer)
@@ -347,11 +397,13 @@ class CNNFromScratch:
 
     # Predicts class ids from logits.
     def predict(self, x: np.ndarray) -> np.ndarray:
+        """Return the most likely class id for each ECG window."""
         logits = self.forward(x, training=False)
         return np.argmax(logits, axis=1)
 
     # Returns all trainable weights.
     def get_parameters(self) -> dict[str, np.ndarray]:
+        """Expose parameters in a stable dictionary for saving and loading."""
         return {
             "conv1.weights": self.conv1.weights,
             "conv1.bias": self.conv1.bias,
@@ -367,6 +419,7 @@ class CNNFromScratch:
 
     # Loads saved trainable weights.
     def set_parameters(self, params: dict[str, np.ndarray]) -> None:
+        """Load parameters from a dictionary produced by ``get_parameters``."""
         self.conv1.weights = params["conv1.weights"].astype(np.float32)
         self.conv1.bias = params["conv1.bias"].astype(np.float32)
         self.conv2.weights = params["conv2.weights"].astype(np.float32)
@@ -380,10 +433,12 @@ class CNNFromScratch:
 
     # Counts trainable parameters.
     def parameter_count(self) -> int:
+        """Count scalar trainable parameters in the scratch model."""
         return int(sum(np.prod(value.shape) for value in self.get_parameters().values()))
 
     # Exports trained NumPy weights to Keras.
     def save_keras_model(self, path: str | Path) -> None:
+        """Build an equivalent Keras model and copy the NumPy-trained weights."""
         try:
             import tensorflow as tf
         except ImportError as exc:
@@ -404,6 +459,8 @@ class CNNFromScratch:
         outputs = tf.keras.layers.Dense(self.num_classes, activation="softmax", name="output_layer")(x)
 
         keras_model = tf.keras.Model(inputs=inputs, outputs=outputs, name="scratch_ecg_cnn")
+        # Keras Conv1D stores kernels as (kernel, in_channels, out_channels),
+        # while the scratch layer stores them as (out_channels, in_channels, kernel).
         keras_model.get_layer("conv1").set_weights([self.conv1.weights.transpose(2, 1, 0), self.conv1.bias])
         keras_model.get_layer("conv2").set_weights([self.conv2.weights.transpose(2, 1, 0), self.conv2.bias])
         keras_model.get_layer("conv3").set_weights([self.conv3.weights.transpose(2, 1, 0), self.conv3.bias])
@@ -424,6 +481,7 @@ def adam_update(
     beta2: float = 0.999,
     eps: float = 1e-8,
 ) -> np.ndarray:
+    """Apply one Adam step while updating moment estimates in place."""
     first_moment *= beta1
     first_moment += (1.0 - beta1) * grads
     second_moment *= beta2
@@ -435,9 +493,11 @@ def adam_update(
 
 # Builds the scratch CNN.
 def build_tiny_cnn(input_length: int, num_classes: int, dropout_rate: float = 0.2) -> CNNFromScratch:
+    """Create the compact CNN used by the training script."""
     return CNNFromScratch(input_length=input_length, num_classes=num_classes, dropout_rate=dropout_rate)
 
 
 # Backward-compatible model builder.
 def build_improved_cnn(input_length: int, num_classes: int, dropout_rate: float = 0.2) -> CNNFromScratch:
+    """Alias kept for older scripts and result-generation commands."""
     return build_tiny_cnn(input_length=input_length, num_classes=num_classes, dropout_rate=dropout_rate)

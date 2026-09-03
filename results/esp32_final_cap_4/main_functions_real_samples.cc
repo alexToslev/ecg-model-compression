@@ -1,3 +1,5 @@
+// Reference TFLite Micro loop used to replay exported real ECG test samples.
+
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
 #include "tensorflow/lite/micro/system_setup.h"
@@ -12,6 +14,8 @@
 #include "ecg_samples.h"
 
 namespace {
+// Static interpreter state mirrors the ESP32 firmware structure used for the
+// final hardware validation.
 const tflite::Model* model = nullptr;
 tflite::MicroInterpreter* interpreter = nullptr;
 TfLiteTensor* input = nullptr;
@@ -23,6 +27,7 @@ alignas(16) uint8_t tensor_arena[kTensorArenaSize];
 }  // namespace
 
 void setup() {
+  // Initialize the runtime, check model compatibility, and allocate tensors once.
   tflite::InitializeTarget();
 
   model = tflite::GetModel(g_final_ecg_cnn_cap_4_int8_model);
@@ -33,6 +38,7 @@ void setup() {
   }
 
   static tflite::MicroMutableOpResolver<12> resolver;
+  // Register the operators present in the exported ECG CNN graph.
   resolver.AddConv2D();
   resolver.AddDepthwiseConv2D();
   resolver.AddFullyConnected();
@@ -60,6 +66,8 @@ void setup() {
 }
 
 void loop() {
+  // Each loop invocation copies one selected ECG beat, invokes the model, and
+  // prints the prediction details used in the hardware run notes.
   if (interpreter == nullptr || input == nullptr || output == nullptr) {
     vTaskDelay(pdMS_TO_TICKS(1000));
     return;
@@ -76,6 +84,7 @@ void loop() {
     input->data.int8[i] = kEcgSamples[sample_index][i];
   }
 
+  // Timing covers only inference, matching the latency reported for ESP32.
   int64_t start_us = esp_timer_get_time();
   TfLiteStatus invoke_status = interpreter->Invoke();
   int elapsed_us = static_cast<int>(esp_timer_get_time() - start_us);
@@ -94,6 +103,7 @@ void loop() {
   MicroPrintf("ECG class outputs:");
   for (int i = 0; i < 5; ++i) {
     int8_t q = output->data.int8[i];
+    // Convert quantized logits/scores to float only for serial readability.
     float score = (q - output->params.zero_point) * output->params.scale;
     if (score > best_score) {
       best_score = score;

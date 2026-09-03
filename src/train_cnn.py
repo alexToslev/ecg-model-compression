@@ -1,3 +1,5 @@
+"""Train the manual NumPy ECG CNN and save evaluation artifacts."""
+
 from __future__ import annotations
 
 import argparse
@@ -22,6 +24,7 @@ from src.models.cnn1d import build_improved_cnn
 
 # Defines command-line arguments.
 def parse_args() -> argparse.Namespace:
+    """Parse training, sampling, imbalance, and output options."""
     parser = argparse.ArgumentParser(
         description="Train a from-scratch 1D CNN with class weighting and rare-class augmentation."
     )
@@ -57,6 +60,7 @@ def parse_args() -> argparse.Namespace:
 
 # Runs the full training workflow.
 def main() -> None:
+    """Run data loading, training, evaluation, and artifact export."""
     args = parse_args()
     np.random.seed(args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -64,6 +68,8 @@ def main() -> None:
     dataset = load_dataset(args)
     save_dataset_visualizations(dataset, args)
 
+    # Capped balanced weights help minority arrhythmia classes contribute to
+    # the loss without letting extremely rare classes dominate every update.
     class_weights = (
         calculate_class_weights(dataset.y_train, dataset.num_classes, args.class_weight_cap)
         if args.class_weights == "balanced"
@@ -71,6 +77,8 @@ def main() -> None:
     )
     x_train, y_train, augmentation_report = prepare_training_data(dataset, args)
     if args.max_train_samples is not None and args.max_train_samples < len(x_train):
+        # Subsampling is for quick diagnostic runs only; the fixed seed keeps
+        # those runs comparable.
         rng = np.random.default_rng(args.seed)
         chosen = rng.choice(len(x_train), size=args.max_train_samples, replace=False)
         x_train = x_train[chosen]
@@ -92,6 +100,7 @@ def main() -> None:
 
 # Loads demo or real MIT-BIH data.
 def load_dataset(args: argparse.Namespace):
+    """Load either synthetic demo data or the real MIT-BIH CSV dataset."""
     if args.demo_data:
         return make_demo_dataset(validation_fraction=args.validation_fraction, seed=args.seed)
     return load_mitbih_csv(
@@ -104,6 +113,7 @@ def load_dataset(args: argparse.Namespace):
 
 # Trains the CNN batch by batch.
 def train_model(model, x_train, y_train, dataset, args, class_weights):
+    """Train the scratch CNN and collect train/validation history."""
     history = {
         "train_loss": [],
         "train_accuracy": [],
@@ -113,6 +123,8 @@ def train_model(model, x_train, y_train, dataset, args, class_weights):
     rng = np.random.default_rng(args.seed)
 
     for epoch in range(1, args.epochs + 1):
+        # The sampling strategy is rebuilt each epoch so weighted and balanced
+        # runs see fresh draws while ordinary shuffle still covers each sample.
         order = make_epoch_indices(
             labels=y_train,
             num_classes=dataset.num_classes,
@@ -128,6 +140,8 @@ def train_model(model, x_train, y_train, dataset, args, class_weights):
             x_batch = x_epoch[start : start + args.batch_size]
             y_batch = y_epoch[start : start + args.batch_size]
 
+            # The model owns both the forward/backward layer caches and the
+            # weighted softmax loss, keeping the training loop easy to inspect.
             logits = model.forward(x_batch, training=True)
             batch_loss = model.loss.forward(logits, y_batch, class_weights=class_weights)
             grad_logits = model.loss.backward()
@@ -159,6 +173,7 @@ def make_epoch_indices(
     strategy: str,
     rng: np.random.Generator,
 ) -> np.ndarray:
+    """Return training indices for shuffle, weighted, or balanced epochs."""
     if strategy == "shuffle":
         return rng.permutation(len(labels))
     if strategy == "weighted":
@@ -174,6 +189,7 @@ def make_weighted_epoch_indices(
     num_classes: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
+    """Sample a full epoch with inverse-frequency example probabilities."""
     counts = np.bincount(labels, minlength=num_classes).astype(np.float64)
     class_probabilities = 1.0 / np.maximum(counts, 1.0)
     sample_probabilities = class_probabilities[labels]
@@ -188,6 +204,7 @@ def make_balanced_epoch_indices(
     batch_size: int,
     rng: np.random.Generator,
 ) -> np.ndarray:
+    """Construct an epoch from class-balanced mini-batches."""
     class_indices = [np.flatnonzero(labels == class_id) for class_id in range(num_classes)]
     present_classes = [class_id for class_id, indices in enumerate(class_indices) if len(indices) > 0]
     if not present_classes:
@@ -200,6 +217,8 @@ def make_balanced_epoch_indices(
 
     for batch_id in range(num_batches):
         batch_indices = []
+        # Rotate which class receives the remainder samples so one class does
+        # not always get the extra example when batch_size is not divisible.
         rotated_classes = present_classes[batch_id % len(present_classes) :] + present_classes[: batch_id % len(present_classes)]
 
         for position, class_id in enumerate(rotated_classes):
@@ -219,6 +238,7 @@ def make_balanced_epoch_indices(
 
 # Computes loss and accuracy on a split.
 def evaluate_loss_accuracy(model, x, y, batch_size: int, class_weights=None) -> tuple[float, float]:
+    """Evaluate average loss and accuracy without enabling training caches."""
     total_loss = 0.0
     predictions = []
     for start in range(0, len(x), batch_size):
@@ -233,12 +253,14 @@ def evaluate_loss_accuracy(model, x, y, batch_size: int, class_weights=None) -> 
 
 # Computes prediction accuracy.
 def accuracy(model, x, y, batch_size: int) -> float:
+    """Compute classification accuracy using batched inference."""
     predictions = predict_in_batches(model, x, batch_size)
     return float(np.mean(predictions == y))
 
 
 # Predicts labels in smaller batches.
 def predict_in_batches(model, x, batch_size: int) -> np.ndarray:
+    """Run inference in batches to avoid large temporary arrays."""
     predictions = []
     for start in range(0, len(x), batch_size):
         logits = model.forward(x[start : start + batch_size], training=False)
@@ -248,6 +270,7 @@ def predict_in_batches(model, x, batch_size: int) -> np.ndarray:
 
 # Computes capped class-imbalance penalties.
 def calculate_class_weights(labels: np.ndarray, num_classes: int, weight_cap: float) -> dict[int, float]:
+    """Compute capped inverse-frequency weights for sparse class labels."""
     counts = np.bincount(labels, minlength=num_classes).astype(np.float32)
     total = float(np.sum(counts))
     weights = total / (num_classes * np.maximum(counts, 1.0))
@@ -257,6 +280,7 @@ def calculate_class_weights(labels: np.ndarray, num_classes: int, weight_cap: fl
 
 # Applies optional rare-class augmentation.
 def prepare_training_data(dataset, args: argparse.Namespace) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Return the training split with optional rare-class augmentation."""
     if not args.augment_rare_classes:
         return dataset.x_train, dataset.y_train, {"enabled": False}
 
@@ -279,6 +303,7 @@ def augment_rare_classes(
     rare_threshold: float,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray, dict]:
+    """Generate extra training examples for classes below the rare threshold."""
     rng = np.random.default_rng(seed)
     counts = np.bincount(y_train, minlength=num_classes)
     max_count = int(np.max(counts))
@@ -298,6 +323,8 @@ def augment_rare_classes(
         class_samples = x_train[y_train == class_id]
         new_samples = np.empty((needed, *x_train.shape[1:]), dtype=np.float32)
 
+        # New examples stay close to real beats: small scale/noise shifts and
+        # tiny temporal offsets preserve the overall morphology.
         for index in range(needed):
             base = class_samples[rng.integers(0, len(class_samples))]
             new_samples[index] = augment_one_sample(base, rng)
@@ -327,6 +354,7 @@ def augment_rare_classes(
 
 # Applies mild ECG-safe augmentation.
 def augment_one_sample(sample: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """Create one mildly perturbed copy of an ECG beat."""
     augmented = sample.astype(np.float32).copy()
     augmented *= rng.uniform(0.95, 1.05)
     augmented += rng.normal(0.0, 0.005, size=augmented.shape).astype(np.float32)
@@ -335,6 +363,8 @@ def augment_one_sample(sample: np.ndarray, rng: np.random.Generator) -> np.ndarr
     shift = int(rng.integers(-2, 3))
     if shift != 0:
         augmented = np.roll(augmented, shift=shift, axis=0)
+        # Fill the wrapped edge with nearby signal values instead of circularly
+        # introducing the opposite edge of the heartbeat.
         if shift > 0:
             augmented[:shift] = augmented[shift]
         else:
@@ -344,6 +374,7 @@ def augment_one_sample(sample: np.ndarray, rng: np.random.Generator) -> np.ndarr
 
 # Saves metrics, plots, weights, and reports.
 def save_artifacts(model, history, dataset, args, class_weights, augmentation_report, training_seconds: float) -> None:
+    """Persist weights, metrics, plots, and summaries from a completed run."""
     np.savez(args.output_dir / "tiny_ecg_cnn_weights.npz", **model.get_parameters())
 
     keras_model_path = args.output_dir / "tiny_ecg_cnn.keras"
@@ -361,6 +392,8 @@ def save_artifacts(model, history, dataset, args, class_weights, augmentation_re
         model, dataset.x_test, dataset.y_test, args.batch_size, class_weights
     )
     predictions = predict_in_batches(model, dataset.x_test, args.batch_size)
+    # scikit-learn artifacts are saved beside the model outputs so later report
+    # generation does not need to rerun the full training job.
     report = classification_report(dataset.y_test, predictions, output_dict=True, zero_division=0)
     matrix = confusion_matrix(dataset.y_test, predictions)
 
@@ -435,11 +468,13 @@ def save_artifacts(model, history, dataset, args, class_weights, augmentation_re
 
 # Saves dataset diagnostic plots.
 def save_dataset_visualizations(dataset, args: argparse.Namespace) -> None:
+    """Write dataset plots beside the training run artifacts."""
     visualize_dataset(dataset, args.output_dir / "dataset_visualizations")
 
 
 # Prints the experiment setup.
 def print_dataset_summary(dataset, x_train, args, class_weights, augmentation_report) -> None:
+    """Print the key run configuration before training starts."""
     print("[train_cnn] From-scratch CNN training")
     print(f"  original train samples: {len(dataset.x_train)}")
     print(f"  effective train samples: {len(x_train)}")

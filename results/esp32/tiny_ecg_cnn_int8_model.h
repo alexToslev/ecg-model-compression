@@ -1,3 +1,5 @@
+// Generated INT8 TFLite flatbuffer from the earlier ESP32 export experiment.
+
 #pragma once
 #include <cstdint>
 #if defined(ARDUINO)

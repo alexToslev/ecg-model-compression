@@ -1,3 +1,6 @@
+// Generated INT8 TFLite flatbuffer for the final cap-4 ECG CNN.
+// Keep the byte array unchanged; regenerate it from the quantized model if needed.
+
 #pragma once
 #include <cstdint>
 #if defined(ARDUINO)
